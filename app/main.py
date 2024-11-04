@@ -171,17 +171,16 @@ def dashboard():
 @rate_limit
 def analyze_playlist(playlist_id):
     try:
+        logger.info(f"Starting analysis for playlist: {playlist_id}")
         manager = SpotifyPlaylistManager(playlist_id)
-        analysis = manager.analyze_tracks()
+        logger.info("SpotifyPlaylistManager initialized successfully")
         
-        # Debug logging
-        logger.debug("Analysis structure:")
-        for key, value in analysis.items():
-            logger.debug(f"{key}: {type(value)}")
+        analysis = manager.analyze_tracks()
+        logger.info("Analysis completed successfully")
         
         return render_template('analysis.html', analysis=analysis)
     except Exception as e:
-        logger.error(f"Analysis error: {str(e)}", exc_info=True)
+        logger.error(f"Analysis error: {str(e)}", exc_info=True)  # Added exc_info=True for full traceback
         flash('Failed to analyze playlist', 'error')
         return redirect(url_for('dashboard'))
 
