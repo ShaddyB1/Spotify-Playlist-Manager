@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from app.services.spotify_service import SpotifyService, SpotifyAuthError
 from app.services.rate_limiter import rate_limit
 from app.manager import SpotifyPlaylistManager
+from app.manager import SpotifyPlaylistManager, PlaylistAnalysisError
 
 # Load environment variables
 load_dotenv()
@@ -189,13 +190,9 @@ def analyze_playlist(playlist_id):
         
         return render_template('analysis.html', analysis=analysis)
         
-    except PlaylistAnalysisError as e:
-        logger.error(f"Analysis error: {str(e)}", exc_info=True)
-        flash(str(e), 'error')
-        return redirect(url_for('dashboard'))
     except Exception as e:
-        logger.error(f"Unexpected error during analysis: {str(e)}", exc_info=True)
-        flash('An unexpected error occurred during analysis', 'error')
+        logger.error(f"Analysis error: {str(e)}", exc_info=True)
+        flash('An error occurred during analysis. Please try again.', 'error')
         return redirect(url_for('dashboard'))
 
 @app.route('/api/playlist/<playlist_id>/similar', methods=['GET'])
