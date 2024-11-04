@@ -173,9 +173,15 @@ def analyze_playlist(playlist_id):
     try:
         manager = SpotifyPlaylistManager(playlist_id)
         analysis = manager.analyze_tracks()
+        
+        # Debug logging
+        logger.debug("Analysis structure:")
+        for key, value in analysis.items():
+            logger.debug(f"{key}: {type(value)}")
+        
         return render_template('analysis.html', analysis=analysis)
     except Exception as e:
-        logger.error(f"Analysis error: {str(e)}")
+        logger.error(f"Analysis error: {str(e)}", exc_info=True)
         flash('Failed to analyze playlist', 'error')
         return redirect(url_for('dashboard'))
 
