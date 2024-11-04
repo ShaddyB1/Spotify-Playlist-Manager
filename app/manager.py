@@ -87,6 +87,9 @@ class SpotifyPlaylistManager:
 
     
 
+
+    
+
     def optimize_playlist(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
         """Optimize playlist based on given criteria."""
         try:
@@ -136,6 +139,7 @@ class SpotifyPlaylistManager:
         except Exception as e:
             logger.error(f"Optimization error: {str(e)}", exc_info=True)
             raise Exception(f"Failed to optimize playlist: {str(e)}")
+
 
     
 
