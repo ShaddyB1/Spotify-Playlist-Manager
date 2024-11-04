@@ -63,11 +63,36 @@ class SpotifyPlaylistManager:
             logger.error(f"Error retrieving playlist tracks: {str(e)}")
             raise PlaylistAnalysisError(f"Failed to get playlist tracks: {str(e)}")
 
-    def get_energy(self, track_id: str) -> float:
-        """Get energy level for a track."""
+    def get_audio_features_batch(self, track_ids: List[str]) -> Dict[str, float]:
+        """Get audio features for multiple tracks in one request."""
         try:
-            features = self.sp.audio_features([track_id])[0]
-            return features['energy'] if features else 0.0
+            # Split track_ids into chunks of 100 (Spotify's limit)
+            features_dict = {}
+            for i in range(0, len(track_ids), 100):
+                batch = track_ids[i:i+100]
+                
+                # Add delay to respect rate limits
+                time.sleep(1)  # Add 1 second delay between batches
+                
+                features = self.sp.audio_features(batch)
+                
+                # Process the batch results
+                for track_id, feature in zip(batch, features):
+                    if feature:
+                        features_dict[track_id] = feature.get('energy', 0.0)
+                    else:
+                        features_dict[track_id] = 0.0
+                        
+            return features_dict
+        except Exception as e:
+            logger.error(f"Error getting audio features for batch: {str(e)}")
+            return {track_id: 0.0 for track_id in track_ids}
+
+    def get_energy(self, track_id: str) -> float:
+        """Get energy level for a single track."""
+        try:
+            features = self.get_audio_features_batch([track_id])
+            return features.get(track_id, 0.0)
         except Exception as e:
             logger.error(f"Error getting energy for track {track_id}: {str(e)}")
             return 0.0
