@@ -139,6 +139,10 @@ def optimize_playlist(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
     def analyze_tracks(self) -> Dict[str, Any]:
         """Analyze tracks for potential removal based on multiple factors."""
         try:
+            # Get playlist info first
+            logger.info("Getting playlist information")
+            playlist_info = self.sp.playlist(self.playlist_id, fields='name')
+            
             logger.info("Starting get_playlist_tracks")
             tracks = self.get_playlist_tracks()
             logger.info(f"Retrieved {len(tracks)} tracks")
@@ -147,7 +151,7 @@ def optimize_playlist(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
             recent_plays = self.sp.current_user_recently_played(limit=50)
             logger.info(f"Retrieved {len(recent_plays['items'])} recent plays")
             
-            logger.info("Creating recent plays lookup")
+            # Create lookup for recently played tracks
             recent_plays_lookup = {
                 item['track']['id']: {
                     'played_at': datetime.fromisoformat(item['played_at'].replace('Z', '+00:00')),
@@ -155,7 +159,9 @@ def optimize_playlist(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
                 } for item in recent_plays['items']
             }
             
+            # Initialize analysis dictionary with default values
             analysis = {
+                'playlist_name': playlist_info.get('name', 'Untitled Playlist'),
                 'total_tracks': len(tracks),
                 'played_tracks': 0,
                 'skipped_tracks': 0,
@@ -165,43 +171,67 @@ def optimize_playlist(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
                 'genre_distribution': defaultdict(int),
                 'artist_distribution': defaultdict(int),
                 'popularity_distribution': defaultdict(int),
-                'decade_distribution': defaultdict(int)
+                'decade_distribution': defaultdict(int),
+                'total_duration_ms': 0,
+                'explicit_tracks': 0,
+                'preview_available': 0
             }
             
             logger.info("Starting track analysis loop")
             track_ids = set()
             
-            for i, track in enumerate(tracks):
+            for i, track_item in enumerate(tracks):
                 try:
-                    if not track['track']:
+                    track = track_item.get('track')
+                    if not track:
                         logger.warning(f"Skipping track at index {i} - no track data")
                         continue
                     
-                    track_id = track['track']['id']
+                    track_id = track.get('id')
+                    if not track_id:
+                        logger.warning(f"Skipping track at index {i} - no track ID")
+                        continue
                     
                     # Check for duplicates
                     if track_id in track_ids:
-                        analysis['duplicates'].append(track['track']['name'])
+                        analysis['duplicates'].append(track.get('name', 'Unknown Track'))
                     track_ids.add(track_id)
                     
-                    logger.debug(f"Processing track: {track['track']['name']}")
+                    # Get track audio features for energy
+                    energy = self.get_energy(track_id)
                     
+                    # Build track info dictionary
                     track_info = {
                         'id': track_id,
-                        'name': track['track']['name'],
-                        'artists': [artist['name'] for artist in track['track']['artists']],
-                        'added_at': track['added_at'],
-                        'popularity': track['track']['popularity'],
-                        'duration_ms': track['track']['duration_ms'],
-                        'explicit': track['track']['explicit'],
-                        'preview_url': track['track']['preview_url'],
-                        'energy': self.get_energy(track_id)
+                        'name': track.get('name', 'Unknown Track'),
+                        'artists': [artist.get('name', 'Unknown Artist') for artist in track.get('artists', [])],
+                        'added_at': track_item.get('added_at', ''),
+                        'popularity': track.get('popularity', 0),
+                        'duration_ms': track.get('duration_ms', 0),
+                        'explicit': track.get('explicit', False),
+                        'preview_url': track.get('preview_url'),
+                        'energy': energy,
+                        'album': track.get('album', {}).get('name', 'Unknown Album'),
+                        'release_date': track.get('album', {}).get('release_date', '')
                     }
                     
-                    analysis['popularity_distribution'][track_info['popularity'] // 10 * 10] += 1
+                    # Update distributions
+                    popularity_bracket = (track_info['popularity'] // 10) * 10
+                    analysis['popularity_distribution'][popularity_bracket] += 1
+                    
                     for artist in track_info['artists']:
                         analysis['artist_distribution'][artist] += 1
                     
+                    # Update release decade distribution if release date is available
+                    if track_info['release_date']:
+                        try:
+                            year = int(track_info['release_date'][:4])
+                            decade = (year // 10) * 10
+                            analysis['decade_distribution'][decade] += 1
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    # Check recent plays
                     if track_id in recent_plays_lookup:
                         track_info['last_played'] = recent_plays_lookup[track_id]['played_at'].isoformat()
                         analysis['played_tracks'] += 1
@@ -209,31 +239,56 @@ def optimize_playlist(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
                         track_info['last_played'] = None
                         analysis['inactive_tracks'] += 1
                     
+                    # Update running totals
+                    analysis['total_duration_ms'] += track_info['duration_ms']
+                    if track_info['explicit']:
+                        analysis['explicit_tracks'] += 1
+                    if track_info['preview_url']:
+                        analysis['preview_available'] += 1
+                    
                     analysis['track_details'].append(track_info)
                     
                 except Exception as track_error:
                     logger.error(f"Error processing track at index {i}: {str(track_error)}")
                     continue
             
-            logger.info("Calculating analysis summaries")
-            analysis.update({
-                'average_popularity': sum(t['popularity'] for t in analysis['track_details']) / len(analysis['track_details']) if analysis['track_details'] else 0,
-                'total_duration_ms': sum(t['duration_ms'] for t in analysis['track_details']),
-                'explicit_tracks': sum(1 for t in analysis['track_details'] if t['explicit']),
-                'preview_available': sum(1 for t in analysis['track_details'] if t['preview_url']),
-                'average_energy': sum(t['energy'] for t in analysis['track_details']) / len(analysis['track_details']) if analysis['track_details'] else 0
-            })
+            # Calculate averages and percentages
+            track_count = len(analysis['track_details'])
+            if track_count > 0:
+                analysis.update({
+                    'average_popularity': sum(t['popularity'] for t in analysis['track_details']) / track_count,
+                    'average_energy': sum(t['energy'] for t in analysis['track_details']) / track_count,
+                    'explicit_percentage': (analysis['explicit_tracks'] / track_count) * 100,
+                    'preview_percentage': (analysis['preview_available'] / track_count) * 100,
+                    'active_percentage': (analysis['played_tracks'] / track_count) * 100
+                })
+            else:
+                analysis.update({
+                    'average_popularity': 0,
+                    'average_energy': 0,
+                    'explicit_percentage': 0,
+                    'preview_percentage': 0,
+                    'active_percentage': 0
+                })
             
-            logger.info("Converting analysis to serializable format")
             final_analysis = self.convert_to_serializable(analysis)
+            
+       
+            for dist_key in ['artist_distribution', 'popularity_distribution', 'decade_distribution']:
+                if dist_key in final_analysis:
+                    final_analysis[dist_key] = dict(sorted(
+                        final_analysis[dist_key].items(),
+                        key=lambda x: x[1],
+                        reverse=True
+                    ))
             
             logger.info(f"Completed analysis for playlist {self.playlist_id}")
             return final_analysis
             
         except Exception as e:
-            logger.error(f"Error analyzing tracks: {str(e)}", exc_info=True)  # Added exc_info=True
+            logger.error(f"Error analyzing tracks: {str(e)}", exc_info=True)
             raise PlaylistAnalysisError(f"Failed to analyze tracks: {str(e)}")
-
+            
     def get_similar_tracks(self, limit: int = 20) -> List[Dict]:
         """Get similar tracks based on playlist tracks."""
         try:
