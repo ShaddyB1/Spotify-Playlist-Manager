@@ -161,6 +161,44 @@ def add_similar_tracks(playlist_id):
     except Exception as e:
         logger.error(f"Add similar tracks error: {str(e)}")
         return jsonify({'error': str(e)}), 500
+        
+@app.route('/api/analyze-optimization/<playlist_id>', methods=['POST'])
+@spotify_service.require_auth
+@rate_limit
+def analyze_optimization(playlist_id):
+    try:
+        criteria = request.json
+        manager = SpotifyPlaylistManager(playlist_id)
+        analysis = manager.analyze_tracks()
+        
+        tracks_to_remove = []
+        for track in analysis['track_details']:
+            reasons = []
+            
+            # Check popularity
+            if track['popularity'] < int(criteria.get('minPopularity', 30)):
+                reasons.append(f"Low popularity ({track['popularity']}%)")
+            
+            # Check energy if available
+            if 'energy' in track and track['energy'] < float(criteria.get('minEnergy', 0.2)):
+                reasons.append(f"Low energy ({track['energy']*100:.0f}%)")
+            
+            if reasons:
+                tracks_to_remove.append({
+                    'id': track['id'],
+                    'name': track['name'],
+                    'artist': track['artists'][0],
+                    'reason': ', '.join(reasons)
+                })
+        
+        return jsonify({
+            'tracksToRemove': tracks_to_remove,
+            'totalTracks': len(analysis['track_details']),
+            'affectedTracks': len(tracks_to_remove)
+        })
+    except Exception as e:
+        logger.error(f"Optimization analysis error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/optimize/<playlist_id>', methods=['POST'])
 @spotify_service.require_auth
