@@ -236,6 +236,13 @@ def add_similar_tracks(playlist_id):
 def analyze_optimization(playlist_id):
     try:
         criteria = request.json
+        if not criteria:
+            return jsonify({'error': 'No criteria provided'}), 400
+
+        # Validate criteria
+        min_popularity = int(criteria.get('minPopularity', 30))
+        min_energy = float(criteria.get('minEnergy', 0.2))
+            
         manager = SpotifyPlaylistManager(playlist_id)
         analysis = manager.analyze_tracks()
         
@@ -244,11 +251,11 @@ def analyze_optimization(playlist_id):
             reasons = []
             
             # Check popularity
-            if track['popularity'] < int(criteria.get('minPopularity', 30)):
+            if track['popularity'] < min_popularity:
                 reasons.append(f"Low popularity ({track['popularity']}%)")
             
-            # Check energy if available
-            if 'energy' in track and track['energy'] < float(criteria.get('minEnergy', 0.2)):
+            # Check energy
+            if track['energy'] < min_energy:
                 reasons.append(f"Low energy ({track['energy']*100:.0f}%)")
             
             if reasons:
@@ -256,16 +263,26 @@ def analyze_optimization(playlist_id):
                     'id': track['id'],
                     'name': track['name'],
                     'artist': track['artists'][0],
-                    'reason': ', '.join(reasons)
+                    'reasons': reasons,
+                    'popularity': track['popularity'],
+                    'energy': track['energy']
                 })
         
         return jsonify({
             'tracksToRemove': tracks_to_remove,
             'totalTracks': len(analysis['track_details']),
-            'affectedTracks': len(tracks_to_remove)
+            'affectedTracks': len(tracks_to_remove),
+            'criteria': {
+                'minPopularity': min_popularity,
+                'minEnergy': min_energy
+            }
         })
+        
+    except ValueError as e:
+        logger.error(f"Invalid criteria format: {str(e)}")
+        return jsonify({'error': f'Invalid criteria format: {str(e)}'}), 400
     except Exception as e:
-        logger.error(f"Optimization analysis error: {str(e)}")
+        logger.error(f"Optimization analysis error: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/optimize/<playlist_id>', methods=['POST'])
@@ -277,41 +294,38 @@ def optimize_playlist(playlist_id):
         if not criteria:
             return jsonify({'error': 'No optimization criteria provided'}), 400
             
-        # Validate criteria
-        try:
-            criteria['minPopularity'] = int(criteria.get('minPopularity', 30))
-            criteria['minEnergy'] = float(criteria.get('minEnergy', 0.2))
-            criteria['autoRemove'] = bool(criteria.get('autoRemove', False))
-        except (ValueError, TypeError) as e:
-            return jsonify({'error': f'Invalid criteria format: {str(e)}'}), 400
-            
         manager = SpotifyPlaylistManager(playlist_id)
         
-        # Verify playlist exists
-        if not manager.verify_playlist():
-            return jsonify({'error': 'Playlist not found or not accessible'}), 404
-            
-        result = manager.optimize_playlist(criteria)
+        
+        validated_criteria = {
+            'minPopularity': int(criteria.get('minPopularity', 30)),
+            'minEnergy': float(criteria.get('minEnergy', 0.2)),
+            'autoRemove': bool(criteria.get('autoRemove', False))
+        }
+        
+        result = manager.optimize_playlist(validated_criteria)
         return jsonify(result)
         
+    except ValueError as e:
+        logger.error(f"Invalid criteria format: {str(e)}")
+        return jsonify({'error': f'Invalid criteria format: {str(e)}'}), 400
     except PlaylistAnalysisError as e:
-        logger.error(f"Optimization error: {str(e)}", exc_info=True)
+        logger.error(f"Optimization error: {str(e)}")
         return jsonify({'error': str(e)}), 400
     except Exception as e:
-        logger.error(f"Unexpected error during optimization: {str(e)}", exc_info=True)
+        logger.error(f"Unexpected optimization error: {str(e)}", exc_info=True)
         return jsonify({'error': 'An unexpected error occurred during optimization'}), 500
 
 @app.route('/logout', methods=['POST'])
 def logout():
     try:
-        # Clear Spotify OAuth cache if it exists
         if spotify_service:
             spotify_service.clear_auth()
         
-        # Clear session data
+     
         session.clear()
         
-        # Set no-cache headers
+      
         response = redirect(url_for('index'))
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
