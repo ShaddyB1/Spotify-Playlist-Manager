@@ -3,11 +3,11 @@ from flask_session import Session
 from flask_cors import CORS
 from datetime import timedelta, datetime
 import os
-from dotenv import load_dotenv
 import logging
-from .services.spotify_service import SpotifyService, SpotifyAuthError
-from .services.rate_limiter import rate_limit
-from .manager import SpotifyPlaylistManager
+from dotenv import load_dotenv
+from app.services.spotify_service import SpotifyService, SpotifyAuthError
+from app.services.rate_limiter import rate_limit
+from app.manager import SpotifyPlaylistManager
 
 # Load environment variables
 load_dotenv()
