@@ -13,16 +13,16 @@ class SpotifyAuthError(Exception):
 
 class SpotifyService:
     def __init__(self):
-        """Initialize the Spotify service with OAuth configuration."""
-        self.client_id = os.getenv('SPOTIFY_CLIENT_ID')
-        self.client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
-        self.redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI')
-        self.scope = (
-            'playlist-modify-public playlist-modify-private '
-            'user-library-read user-read-recently-played '
-            'playlist-read-private playlist-read-collaborative '
-            'user-top-read'
-        )
+       def __init__(self):
+            self.client_id = os.getenv('SPOTIFY_CLIENT_ID')
+            self.client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+            self.redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI')
+            self.scope = (
+                "playlist-modify-public playlist-modify-private "
+                "user-library-read user-read-recently-played "
+                "user-read-playback-state playlist-read-private "
+                "playlist-read-collaborative user-top-read"
+    )
 
     def create_oauth(self):
         """Create SpotifyOAuth instance."""
