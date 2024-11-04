@@ -216,54 +216,54 @@ class SpotifyPlaylistManager:
             raise PlaylistAnalysisError(f"Failed to analyze tracks: {str(e)}")
 
     def get_similar_tracks(self, limit: int = 20) -> List[Dict]:
-    """Get similar tracks based on playlist's current tracks."""
-    try:
-        retries = 3
-        for attempt in range(retries):
-            try:
-                # Get current tracks
-                tracks = self.get_playlist_tracks(self.playlist_id)
-                if not tracks:
-                    logger.error("No tracks found in the playlist to base recommendations on.")
-                    return []
-
-                # Get seed tracks and artists
-                seed_tracks = self._get_seed_tracks(tracks, limit=3)
-                seed_artists = self._get_seed_artists(tracks, limit=2)
-
-                if not seed_tracks and not seed_artists:
-                    logger.error("No valid seed tracks or artists for recommendations.")
-                    return []
-
-                # Get recommendations
-                recommendations = self.sp.recommendations(
-                    seed_tracks=seed_tracks,
-                    seed_artists=seed_artists,
-                    limit=limit,
-                    min_popularity=30
-                )
-
-                # Format and return results
-                return [
-                    {
-                        'id': track['id'],
-                        'name': track['name'],
-                        'artist': track['artists'][0]['name'],
-                        'popularity': track['popularity'],
-                        'preview_url': track['preview_url'],
-                        'image': track['album']['images'][0]['url'] if track['album']['images'] else None
-                    }
-                    for track in recommendations['tracks']
-                ]
-            except EOFError:
-                if attempt == retries - 1:
-                    raise
-                logger.warning(f"EOF Error in get_similar_tracks, attempt {attempt + 1} of {retries}")
-                time.sleep(1)
-    except Exception as e:
-        logger.error(f"Error getting similar tracks: {str(e)}")
-        traceback.print_exc()  # Prints detailed error stack trace
-        raise
+        """Get similar tracks based on playlist's current tracks."""
+        try:
+            retries = 3
+            for attempt in range(retries):
+                try:
+                    # Get current tracks
+                    tracks = self.get_playlist_tracks(self.playlist_id)
+                    if not tracks:
+                        logger.error("No tracks found in the playlist to base recommendations on.")
+                        return []
+    
+                    # Get seed tracks and artists
+                    seed_tracks = self._get_seed_tracks(tracks, limit=3)
+                    seed_artists = self._get_seed_artists(tracks, limit=2)
+    
+                    if not seed_tracks and not seed_artists:
+                        logger.error("No valid seed tracks or artists for recommendations.")
+                        return []
+    
+                    # Get recommendations
+                    recommendations = self.sp.recommendations(
+                        seed_tracks=seed_tracks,
+                        seed_artists=seed_artists,
+                        limit=limit,
+                        min_popularity=30
+                    )
+    
+                    # Format and return results
+                    return [
+                        {
+                            'id': track['id'],
+                            'name': track['name'],
+                            'artist': track['artists'][0]['name'],
+                            'popularity': track['popularity'],
+                            'preview_url': track['preview_url'],
+                            'image': track['album']['images'][0]['url'] if track['album']['images'] else None
+                        }
+                        for track in recommendations['tracks']
+                    ]
+                except EOFError:
+                    if attempt == retries - 1:
+                        raise
+                    logger.warning(f"EOF Error in get_similar_tracks, attempt {attempt + 1} of {retries}")
+                    time.sleep(1)
+        except Exception as e:
+            logger.error(f"Error getting similar tracks: {str(e)}")
+            traceback.print_exc()  # Prints detailed error stack trace
+            raise
 
     
     def add_similar_tracks(self, track_ids: List[str], playlist_id: Optional[str] = None) -> int:
