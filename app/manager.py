@@ -66,25 +66,31 @@ class SpotifyPlaylistManager:
             logger.error(f"Failed to initialize Spotify client: {str(e)}")
             raise
 
-    def get_playlist_tracks(self, playlist_id: Optional[str] = None) -> List[Dict]:
-        """Get all tracks from the playlist with pagination handling."""
+    def get_playlist_tracks(self) -> List[Dict]:
+        """Get all tracks from the playlist with pagination."""
         try:
-            target_playlist_id = playlist_id or self.playlist_id
-            if not target_playlist_id:
-                raise ValueError("No playlist ID provided")
-
             tracks = []
-            results = self.sp.playlist_tracks(target_playlist_id)
+            retries = 3  # Add retry mechanism
             
-            while results:
-                tracks.extend(results['items'])
-                if results['next']:
-                    results = self.sp.next(results)
-                else:
-                    break
+            for attempt in range(retries):
+                try:
+                    results = self.sp.playlist_tracks(self.playlist_id)
                     
-            logger.info(f"Retrieved {len(tracks)} tracks from playlist {target_playlist_id}")
-            return tracks
+                    while results:
+                        tracks.extend(results['items'])
+                        if results['next']:
+                            results = self.sp.next(results)
+                        else:
+                            break
+                            
+                    logger.info(f"Retrieved {len(tracks)} tracks from playlist {self.playlist_id}")
+                    return tracks
+                except EOFError:
+                    if attempt == retries - 1:  # Last attempt
+                        raise
+                    logger.warning(f"EOF Error, attempt {attempt + 1} of {retries}")
+                    time.sleep(1)  # Wait before retrying
+                    
         except Exception as e:
             logger.error(f"Error retrieving playlist tracks: {str(e)}")
             raise PlaylistAnalysisError(f"Failed to get playlist tracks: {str(e)}")
@@ -195,70 +201,50 @@ class SpotifyPlaylistManager:
             logger.error(f"Error analyzing tracks: {str(e)}")
             raise PlaylistAnalysisError(f"Failed to analyze tracks: {str(e)}")
 
-    def get_similar_tracks(self, playlist_id: Optional[str] = None, limit: int = 20) -> List[Dict]:
+    def get_similar_tracks(self, limit: int = 20) -> List[Dict]:
         """Get similar tracks based on playlist's current tracks."""
         try:
-            target_playlist_id = playlist_id or self.playlist_id
-            if not target_playlist_id:
-                raise ValueError("No playlist ID provided")
+            retries = 3
+            for attempt in range(retries):
+                try:
+                    # Get current tracks
+                    tracks = self.get_playlist_tracks()
+                    if not tracks:
+                        return []
 
-            tracks = self.get_playlist_tracks(target_playlist_id)
-            if not tracks:
-                return []
+                    # Get seed tracks and artists
+                    seed_tracks = self._get_seed_tracks(tracks, limit=3)
+                    seed_artists = self._get_seed_artists(tracks, limit=2)
 
-            # Get seed tracks and audio features
-            track_ids = [track['track']['id'] for track in tracks if track['track']][:5]
-            audio_features = self.sp.audio_features(track_ids)
-            
-            # Calculate average features
-            avg_features = {
-                'danceability': sum(t['danceability'] for t in audio_features if t) / len(audio_features),
-                'energy': sum(t['energy'] for t in audio_features if t) / len(audio_features),
-                'valence': sum(t['valence'] for t in audio_features if t) / len(audio_features)
-            }
+                    # Get recommendations
+                    recommendations = self.sp.recommendations(
+                        seed_tracks=seed_tracks,
+                        seed_artists=seed_artists,
+                        limit=limit,
+                        min_popularity=30
+                    )
 
-            # Get top artists
-            artist_counts = defaultdict(int)
-            for track in tracks:
-                if track['track'] and track['track']['artists']:
-                    artist_counts[track['track']['artists'][0]['id']] += 1
-            
-            top_artists = sorted(artist_counts.items(), key=lambda x: x[1], reverse=True)[:2]
-            seed_artists = [artist_id for artist_id, _ in top_artists]
-
-            # Get recommendations
-            recommendations = self.sp.recommendations(
-                seed_tracks=track_ids[:3],
-                seed_artists=seed_artists,
-                limit=limit,
-                target_danceability=avg_features['danceability'],
-                target_energy=avg_features['energy'],
-                target_valence=avg_features['valence'],
-                min_popularity=40
-            )
-
-            # Format response and filter out existing tracks
-            existing_track_ids = {track['track']['id'] for track in tracks if track['track']}
-            similar_tracks = [
-                {
-                    'id': track['id'],
-                    'name': track['name'],
-                    'artist': track['artists'][0]['name'],
-                    'popularity': track['popularity'],
-                    'preview_url': track['preview_url'],
-                    'image': track['album']['images'][0]['url'] if track['album']['images'] else None
-                }
-                for track in recommendations['tracks']
-                if track['id'] not in existing_track_ids
-            ]
-
-            logger.info(f"Found {len(similar_tracks)} similar tracks for playlist {target_playlist_id}")
-            return similar_tracks
+                    # Format and return results
+                    return [
+                        {
+                            'id': track['id'],
+                            'name': track['name'],
+                            'artist': track['artists'][0]['name'],
+                            'popularity': track['popularity'],
+                            'preview_url': track['preview_url'],
+                            'image': track['album']['images'][0]['url'] if track['album']['images'] else None
+                        }
+                        for track in recommendations['tracks']
+                    ]
+                except EOFError:
+                    if attempt == retries - 1:
+                        raise
+                    logger.warning(f"EOF Error in get_similar_tracks, attempt {attempt + 1} of {retries}")
+                    time.sleep(1)
 
         except Exception as e:
             logger.error(f"Error getting similar tracks: {str(e)}")
             raise
-
     def add_similar_tracks(self, track_ids: List[str], playlist_id: Optional[str] = None) -> int:
         """Add selected similar tracks to the playlist."""
         try:
