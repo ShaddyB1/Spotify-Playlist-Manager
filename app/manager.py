@@ -370,69 +370,69 @@ class SpotifyPlaylistManager:
             return False
 
     def get_playlist_metrics(self) -> Dict[str, Any]:
-    """Get comprehensive metrics about the playlist."""
-    try:
-        analysis = self.analyze_tracks()
-        
-        metrics = {
-            'basic_info': {
-                'total_tracks': analysis['total_tracks'],
-                'total_duration': analysis['total_duration_ms'] / (1000 * 60),  # in minutes
-                'average_popularity': analysis['average_popularity'],
-                'average_tempo': analysis['average_tempo']
-            },
-            'activity': {
-                'played_tracks': analysis['played_tracks'],
-                'inactive_tracks': analysis['inactive_tracks'],
-                'play_ratio': analysis['played_tracks'] / analysis['total_tracks'] if analysis['total_tracks'] > 0 else 0
-            },
-            'content': {
-                'explicit_tracks': analysis['explicit_tracks'],
-                'preview_available': analysis['preview_available'],
-                'unique_artists': len(analysis['artist_distribution']),
-                'artist_variety': len(analysis['artist_distribution']) / analysis['total_tracks'] if analysis['total_tracks'] > 0 else 0
-            },
-            'distributions': {
-                'popularity': dict(sorted(analysis['popularity_distribution'].items())),
-                'artists': dict(sorted(analysis['artist_distribution'].items(), 
-                                    key=lambda x: x[1], 
-                                    reverse=True)[:10]),  # Top 10 artists
-                'decades': dict(sorted(analysis['decade_distribution'].items())),
-                'tempo': {
-                    'mean': np.mean(analysis['tempo_distribution']) if analysis['tempo_distribution'] else 0,
-                    'std': np.std(analysis['tempo_distribution']) if analysis['tempo_distribution'] else 0,
-                    'ranges': {
-                        'slow': len([t for t in analysis['tempo_distribution'] if t < 100]),
-                        'medium': len([t for t in analysis['tempo_distribution'] if 100 <= t <= 130]),
-                        'fast': len([t for t in analysis['tempo_distribution'] if t > 130])
-                    }
-                }
-            },
-            'audio_features': {
-                'average': {
-                    'danceability': np.mean([t.get('danceability', 0) for t in analysis['track_details']]),
-                    'energy': np.mean([t.get('energy', 0) for t in analysis['track_details']]),
-                    'valence': np.mean([t.get('valence', 0) for t in analysis['track_details']]),
-                    'acousticness': np.mean([t.get('acousticness', 0) for t in analysis['track_details']])
+        """Get comprehensive metrics about the playlist."""
+        try:
+            analysis = self.analyze_tracks()
+            
+            metrics = {
+                'basic_info': {
+                    'total_tracks': analysis['total_tracks'],
+                    'total_duration': analysis['total_duration_ms'] / (1000 * 60),  # in minutes
+                    'average_popularity': analysis['average_popularity'],
+                    'average_tempo': analysis['average_tempo']
                 },
-                'variety': {
-                    'danceability': np.std([t.get('danceability', 0) for t in analysis['track_details']]),
-                    'energy': np.std([t.get('energy', 0) for t in analysis['track_details']]),
-                    'valence': np.std([t.get('valence', 0) for t in analysis['track_details']]),
-                    'acousticness': np.std([t.get('acousticness', 0) for t in analysis['track_details']])
+                'activity': {
+                    'played_tracks': analysis['played_tracks'],
+                    'inactive_tracks': analysis['inactive_tracks'],
+                    'play_ratio': analysis['played_tracks'] / analysis['total_tracks'] if analysis['total_tracks'] > 0 else 0
+                },
+                'content': {
+                    'explicit_tracks': analysis['explicit_tracks'],
+                    'preview_available': analysis['preview_available'],
+                    'unique_artists': len(analysis['artist_distribution']),
+                    'artist_variety': len(analysis['artist_distribution']) / analysis['total_tracks'] if analysis['total_tracks'] > 0 else 0
+                },
+                'distributions': {
+                    'popularity': dict(sorted(analysis['popularity_distribution'].items())),
+                    'artists': dict(sorted(analysis['artist_distribution'].items(), 
+                                        key=lambda x: x[1], 
+                                        reverse=True)[:10]),  # Top 10 artists
+                    'decades': dict(sorted(analysis['decade_distribution'].items())),
+                    'tempo': {
+                        'mean': np.mean(analysis['tempo_distribution']) if analysis['tempo_distribution'] else 0,
+                        'std': np.std(analysis['tempo_distribution']) if analysis['tempo_distribution'] else 0,
+                        'ranges': {
+                            'slow': len([t for t in analysis['tempo_distribution'] if t < 100]),
+                            'medium': len([t for t in analysis['tempo_distribution'] if 100 <= t <= 130]),
+                            'fast': len([t for t in analysis['tempo_distribution'] if t > 130])
+                        }
+                    }
+                },
+                'audio_features': {
+                    'average': {
+                        'danceability': np.mean([t.get('danceability', 0) for t in analysis['track_details']]),
+                        'energy': np.mean([t.get('energy', 0) for t in analysis['track_details']]),
+                        'valence': np.mean([t.get('valence', 0) for t in analysis['track_details']]),
+                        'acousticness': np.mean([t.get('acousticness', 0) for t in analysis['track_details']])
+                    },
+                    'variety': {
+                        'danceability': np.std([t.get('danceability', 0) for t in analysis['track_details']]),
+                        'energy': np.std([t.get('energy', 0) for t in analysis['track_details']]),
+                        'valence': np.std([t.get('valence', 0) for t in analysis['track_details']]),
+                        'acousticness': np.std([t.get('acousticness', 0) for t in analysis['track_details']])
+                    }
+                },
+                'recommendations': {
+                    'suggested_actions': self._generate_recommendations(analysis)
                 }
-            },
-            'recommendations': {
-                'suggested_actions': self._generate_recommendations(analysis)
             }
-        }
-        
-        logger.info(f"Generated metrics for playlist {self.playlist_id}")
-        return metrics
-        
-    except Exception as e:
-        logger.error(f"Error getting playlist metrics: {str(e)}")
-        raise PlaylistAnalysisError(f"Failed to get playlist metrics: {str(e)}")
+            
+            logger.info(f"Generated metrics for playlist {self.playlist_id}")
+            return metrics
+            
+        except Exception as e:
+            logger.error(f"Error getting playlist metrics: {str(e)}")
+            raise PlaylistAnalysisError(f"Failed to get playlist metrics: {str(e)}")
 
     def _generate_recommendations(self, analysis: Dict[str, Any]) -> List[Dict[str, str]]:
         """Generate recommendations for playlist improvement."""
