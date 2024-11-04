@@ -1,7 +1,7 @@
 from flask import Flask, redirect, request, session, url_for, render_template, flash, jsonify
 from flask_session import Session
 from flask_cors import CORS
-from datetime import timedelta
+from datetime import timedelta, datetime
 import os
 from dotenv import load_dotenv
 import logging
@@ -22,28 +22,9 @@ logger = logging.getLogger(__name__)
 # Create the Flask app first
 app = Flask(__name__)
 
-# Then configure it
+# Configure app with all settings at once (don't split the configuration)
 app.config.update(
     SECRET_KEY=os.getenv('FLASK_SECRET_KEY'),
-    SESSION_TYPE='filesystem',
-    SESSION_PERMANENT=True,
-    PERMANENT_SESSION_LIFETIME=timedelta(days=1),
-    SESSION_COOKIE_SECURE=True,
-    SESSION_COOKIE_HTTPONLY=True,
-    SESSION_COOKIE_SAMESITE='Lax'
-)
-
-
-
-
-# Initialize extensions
-CORS(app)
-Session(app)
-
-# Initialize services
-spotify_service = SpotifyService()
-
-app.config.update(
     SESSION_TYPE='filesystem',
     SESSION_PERMANENT=False,  # Sessions expire when browser closes
     PERMANENT_SESSION_LIFETIME=timedelta(hours=1),  # Max session time
@@ -53,27 +34,51 @@ app.config.update(
     SESSION_COOKIE_NAME='spotify_session'  # Unique session name
 )
 
+# Initialize extensions
+CORS(app)
+Session(app)
+
+# Initialize services
+spotify_service = SpotifyService()
+
+# Add cache control
+@app.after_request
+def add_header(response):
+    """Add headers to prevent caching."""
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
 @app.before_request
 def check_session():
     """Check session validity before each request."""
     if 'token_info' in session:
-        # Check if session is expired
-        created_at = session.get('created_at')
-        if created_at:
-            created_at = datetime.fromisoformat(created_at)
-            if datetime.now() - created_at > timedelta(hours=1):
-                session.clear()
-                return redirect(url_for('index'))
-                
-        # Check if token needs refresh
-        if spotify_service.is_token_expired(session['token_info']):
-            try:
-                new_token = spotify_service.refresh_token(session['token_info'])
-                session['token_info'] = new_token
-                session['created_at'] = datetime.now().isoformat()
-            except:
-                session.clear()
-                return redirect(url_for('index'))
+        try:
+            # Check if session is expired
+            created_at = session.get('created_at')
+            if created_at:
+                created_at = datetime.fromisoformat(created_at)
+                if datetime.now() - created_at > timedelta(hours=1):
+                    logger.info("Session expired, clearing session")
+                    session.clear()
+                    return redirect(url_for('index'))
+                    
+            # Check if token needs refresh
+            if spotify_service.is_token_expired(session['token_info']):
+                try:
+                    new_token = spotify_service.refresh_token(session['token_info'])
+                    session['token_info'] = new_token
+                    session['created_at'] = datetime.now().isoformat()
+                    logger.info("Token refreshed successfully")
+                except Exception as e:
+                    logger.error(f"Token refresh failed: {str(e)}")
+                    session.clear()
+                    return redirect(url_for('index'))
+        except Exception as e:
+            logger.error(f"Session check error: {str(e)}")
+            session.clear()
+            return redirect(url_for('index'))
 
 @app.route('/')
 def index():
