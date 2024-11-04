@@ -1,4 +1,215 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-spotify-gray p-6 rounded-lg flex items-center space-x-4">
+            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
+            <span class="text-white">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Header Section -->
+    <div class="mb-8">
+        <div class="flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Your Playlists</h1>
+            <div class="w-full sm:w-auto flex items-center space-x-4">
+                <div class="relative flex-grow sm:flex-grow-0">
+                    <input type="text" 
+                           id="searchPlaylists" 
+                           placeholder="Search playlists..." 
+                           class="w-full bg-gray-800 text-white px-4 py-2 rounded-full pr-10 focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <svg class="w-5 h-5 absolute right-3 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                </div>
+                <select id="sortPlaylists" class="bg-gray-800 text-white px-4 py-2 rounded-full focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <option value="name">Sort by Name</option>
+                    <option value="tracks">Sort by Tracks</option>
+                    <option value="recent">Sort by Recent</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Playlists Grid -->
+    <div id="playlistsGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {% for playlist in playlists %}
+        <div class="playlist-card bg-gray-800 rounded-lg overflow-hidden hover:transform hover:scale-[1.02] transition-all duration-200"
+             data-name="{{ playlist.name|lower }}"
+             data-tracks="{{ playlist.tracks.total }}"
+             data-id="{{ playlist.id }}">
+            
+            <!-- Playlist Image -->
+            <div class="relative aspect-square">
+                <div class="skeleton-loading absolute inset-0 bg-gray-700 animate-pulse"></div>
+                <img src="{{ playlist.images[0].url if playlist.images else '/static/img/default-playlist.png' }}"
+                     alt="{{ playlist.name }}"
+                     class="absolute inset-0 w-full h-full object-cover opacity-0 transition-opacity duration-300"
+                     onload="this.classList.remove('opacity-0'); this.previousElementSibling.remove();">
+                <div class="absolute inset-0 bg-gradient-to-t from-gray-800 to-transparent"></div>
+            </div>
+            
+            <!-- Playlist Info -->
+            <div class="p-4">
+                <div class="flex justify-between items-start mb-2">
+                    <h3 class="text-xl font-bold text-white truncate flex-1 playlist-title">{{ playlist.name }}</h3>
+                    {% if playlist.owner.id == user.id %}
+                    <span class="bg-green-500 text-white text-xs px-2 py-1 rounded-full ml-2">Yours</span>
+                    {% endif %}
+                </div>
+                
+                <p class="text-gray-400 mb-4 flex items-center">
+                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+                    </svg>
+                    {{ playlist.tracks.total }} tracks
+                </p>
+
+                <div class="flex space-x-2">
+                    <a href="{{ url_for('analyze_playlist', playlist_id=playlist.id) }}"
+                       class="flex-1 bg-green-500 text-white px-4 py-2 rounded-full text-sm text-center hover:bg-green-600 transition-colors">
+                        Analyze
+                    </a>
+                    {% if playlist.owner.id == user.id %}
+                    <button onclick="openPlaylistActions('{{ playlist.id }}')"
+                            class="flex-1 bg-blue-500 text-white px-4 py-2 rounded-full text-sm hover:bg-blue-600 transition-colors">
+                        Actions
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Empty State -->
+    <div id="emptyState" class="hidden text-center py-12">
+        <svg class="w-16 h-16 mx-auto text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"/>
+        </svg>
+        <h3 class="text-xl font-bold text-white mb-2">No Playlists Found</h3>
+        <p class="text-gray-400">No playlists match your search</p>
+    </div>
+
+    <!-- Playlist Actions Modal -->
+    <div id="playlistActionsModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-spotify-gray p-6 rounded-lg max-w-2xl w-full mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-white">Playlist Actions</h3>
+                <button onclick="closePlaylistActions()" class="text-gray-400 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <!-- Similar Songs Section -->
+                <div id="similarSongsSection" class="hidden">
+                    <h4 class="text-lg font-medium text-white mb-3">Similar Songs</h4>
+                    <div id="similarSongsList" class="max-h-96 overflow-y-auto space-y-2">
+                        <!-- Similar songs will be inserted here -->
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex flex-col space-y-2">
+                    <button onclick="loadSimilarSongs()" 
+                            class="w-full bg-green-500 text-white px-4 py-2 rounded-full hover:bg-green-600 transition-colors">
+                        Find Similar Songs
+                    </button>
+                    <button onclick="openOptimizeModal()" 
+                            class="w-full bg-blue-500 text-white px-4 py-2 rounded-full hover:bg-blue-600 transition-colors">
+                        Optimize Playlist
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Optimize Modal -->
+    <div id="optimizeModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-spotify-gray p-6 rounded-lg max-w-2xl w-full mx-4">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-xl font-bold text-white">Optimize Playlist</h3>
+                <button onclick="closeOptimizeModal()" class="text-gray-400 hover:text-white">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block mb-2 text-sm font-medium text-gray-400">
+                            Minimum popularity
+                            <span id="popularityValue" class="text-white">30</span>%
+                        </label>
+                        <input type="range" 
+                               id="popularity" 
+                               min="0" 
+                               max="100" 
+                               value="30" 
+                               class="w-full bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                               oninput="document.getElementById('popularityValue').textContent = this.value">
+                    </div>
+
+                    <div>
+                        <label class="block mb-2 text-sm font-medium text-gray-400">
+                            Remove if inactive for
+                            <span id="inactiveDaysValue" class="text-white">30</span> days
+                        </label>
+                        <input type="range" 
+                               id="inactiveDays" 
+                               min="7" 
+                               max="90" 
+                               value="30" 
+                               class="w-full bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                               oninput="document.getElementById('inactiveDaysValue').textContent = this.value">
+                    </div>
+
+                    <div>
+                        <label class="block mb-2 text-sm font-medium text-gray-400">
+                            Minimum energy level
+                            <span id="energyValue" class="text-white">20</span>%
+                        </label>
+                        <input type="range" 
+                               id="energy" 
+                               min="0" 
+                               max="100" 
+                               value="20" 
+                               class="w-full bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                               oninput="document.getElementById('energyValue').textContent = this.value">
+                    </div>
+                </div>
+
+                <!-- Preview Section -->
+                <div>
+                    <h4 class="text-lg font-medium text-white mb-3">Tracks to be Removed</h4>
+                    <div id="tracksToRemove" class="max-h-60 overflow-y-auto bg-gray-900 rounded-lg p-4 space-y-2">
+                        <div class="text-gray-400 text-center">Adjust criteria to see affected tracks</div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex justify-end space-x-4">
+                    <button onclick="closeOptimizeModal()" 
+                            class="px-4 py-2 rounded-full bg-gray-700 text-white hover:bg-gray-600 transition-colors">
+                        Cancel
+                    </button>
+                    <button onclick="confirmOptimization()" 
+                            class="px-6 py-2 rounded-full bg-green-500 text-white hover:bg-green-600 transition-colors">
+                        Optimize Playlist
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
 {% block scripts %}
 <script>
@@ -7,7 +218,7 @@ let currentPlaylistId = null;
 let selectedSimilarTracks = new Set();
 let debounceTimeout;
 
-// UI Helper Functions
+// Loading overlay functions
 function showLoading() {
     document.getElementById('loadingOverlay').classList.remove('hidden');
     document.getElementById('loadingOverlay').classList.add('flex');
@@ -18,12 +229,15 @@ function hideLoading() {
     document.getElementById('loadingOverlay').classList.remove('flex');
 }
 
+// Error handling
 function showError(message) {
-    const toast = document.getElementById('errorToast');
-    document.getElementById('errorMessage').textContent = message;
-    toast.style.transform = 'translateX(0)';
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    toast.textContent = message;
+    document.body.appendChild(toast);
     setTimeout(() => {
-        toast.style.transform = 'translateX(100%)';
+        toast.style.opacity = '0';
+        setTimeout(() => toast.remove(), 300);
     }, 5000);
 }
 
@@ -45,19 +259,7 @@ function showNotification(message, type = 'success') {
     }, 3000);
 }
 
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-// Playlist Actions Modal Functions
+// Playlist actions modal
 function openPlaylistActions(playlistId) {
     currentPlaylistId = playlistId;
     document.getElementById('playlistActionsModal').classList.remove('hidden');
@@ -68,12 +270,12 @@ function openPlaylistActions(playlistId) {
 
 function closePlaylistActions() {
     document.getElementById('playlistActionsModal').classList.add('hidden');
+    document.getElementById('playlistActionsModal').classList.add('hidden');
     document.getElementById('playlistActionsModal').classList.remove('flex');
     currentPlaylistId = null;
 }
 
-// Similar Songs Functions
-async function loadSimilarSongs() {
+    async function loadSimilarSongs() {
     if (!currentPlaylistId) return;
     
     try {
@@ -183,7 +385,7 @@ async function addSelectedTracks() {
     }
 }
 
-// Optimization Modal Functions
+// Optimize modal functions
 function openOptimizeModal() {
     document.getElementById('optimizeModal').classList.remove('hidden');
     document.getElementById('optimizeModal').classList.add('flex');
@@ -196,6 +398,8 @@ function closeOptimizeModal() {
 }
 
 async function analyzePlaylistOptimization() {
+    if (!currentPlaylistId) return;
+
     const tracksContainer = document.getElementById('tracksToRemove');
     tracksContainer.innerHTML = '<div class="text-center"><div class="animate-spin inline-block w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full"></div><div class="mt-2">Analyzing playlist...</div></div>';
 
@@ -265,7 +469,10 @@ async function confirmOptimization() {
     }
 }
 
-// Search and Sort Functions
+// Search and sort functionality
+const searchInput = document.getElementById('searchPlaylists');
+const sortSelect = document.getElementById('sortPlaylists');
+
 function filterAndSortPlaylists() {
     const searchTerm = searchInput.value.toLowerCase();
     const sortBy = sortSelect.value;
@@ -293,27 +500,24 @@ function filterAndSortPlaylists() {
     document.getElementById('emptyState').classList.toggle('hidden', visibleCount > 0);
 }
 
-// Event Listeners
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Event listeners
+searchInput.addEventListener('input', debounce(filterAndSortPlaylists, 300));
+sortSelect.addEventListener('change', filterAndSortPlaylists);
+
+// Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    const searchInput = document.getElementById('searchPlaylists');
-    const sortSelect = document.getElementById('sortPlaylists');
-    const popularityInput = document.getElementById('popularity');
-    const inactiveDaysInput = document.getElementById('inactiveDays');
-    const energyInput = document.getElementById('energy');
-
-    // Search and sort listeners
-    searchInput.addEventListener('input', () => {
-        clearTimeout(debounceTimeout);
-        debounceTimeout = setTimeout(filterAndSortPlaylists, 300);
-    });
-    sortSelect.addEventListener('change', filterAndSortPlaylists);
-
-    // Optimization criteria listeners
-    popularityInput?.addEventListener('input', debounce(analyzePlaylistOptimization, 500));
-    inactiveDaysInput?.addEventListener('input', debounce(analyzePlaylistOptimization, 500));
-    energyInput?.addEventListener('input', debounce(analyzePlaylistOptimization, 500));
-
-    // Initial animation
     const cards = document.querySelectorAll('.playlist-card');
     cards.forEach((card, index) => {
         card.style.opacity = '0';
