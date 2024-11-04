@@ -1,6 +1,0 @@
-spotipy
-pandas
-numpy
-click
-python-dotenv
-SQLAlchemy

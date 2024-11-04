@@ -1,9 +1,0 @@
-setup.py
-spotify_playlist_manager.egg-info/PKG-INFO
-spotify_playlist_manager.egg-info/SOURCES.txt
-spotify_playlist_manager.egg-info/dependency_links.txt
-spotify_playlist_manager.egg-info/requires.txt
-spotify_playlist_manager.egg-info/top_level.txt
-src/__init__.py
-src/manager.py
-src/setup.py

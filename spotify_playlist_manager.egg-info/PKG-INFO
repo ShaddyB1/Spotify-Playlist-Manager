@@ -1,9 +1,0 @@
-Metadata-Version: 2.1
-Name: spotify-playlist-manager
-Version: 0.1
-Requires-Dist: spotipy
-Requires-Dist: pandas
-Requires-Dist: numpy
-Requires-Dist: click
-Requires-Dist: python-dotenv
-Requires-Dist: SQLAlchemy
