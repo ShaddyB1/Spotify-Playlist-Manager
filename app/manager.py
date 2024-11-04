@@ -46,80 +46,65 @@ class SpotifyPlaylistManager:
     def __init__(self, playlist_id: Optional[str] = None):
         """Initialize the Spotify client with comprehensive scope."""
         load_dotenv()
-        
+
+        # Define the necessary scope for Spotify API
         self.scope = (
             "playlist-modify-public playlist-modify-private "
             "user-library-read user-read-recently-played "
             "user-read-playback-state playlist-read-private "
             "user-top-read"
         )
-        
+
+        # Ensure required environment variables are set
+        client_id = os.getenv('SPOTIFY_CLIENT_ID')
+        client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+        redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI')
+
+        if not all([client_id, client_secret, redirect_uri]):
+            logger.error("Missing required Spotify environment variables.")
+            raise SpotifyAuthError("Spotify authentication details are incomplete.")
+
         try:
+            # Initialize the Spotify client
             self.sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
-                client_id=os.getenv('SPOTIFY_CLIENT_ID'),
-                client_secret=os.getenv('SPOTIFY_CLIENT_SECRET'),
-                redirect_uri=os.getenv('SPOTIFY_REDIRECT_URI'),
+                client_id=client_id,
+                client_secret=client_secret,
+                redirect_uri=redirect_uri,
                 scope=self.scope
             ))
             self.playlist_id = playlist_id
             logger.info(f"Successfully initialized SpotifyPlaylistManager for playlist: {playlist_id}")
         except Exception as e:
             logger.error(f"Failed to initialize Spotify client: {str(e)}")
-            raise
+            raise  # Re-raise the exception for further handling
 
-    def get_playlist_tracks(self, playlist_id: Optional[str] = None) -> List[dict]:
-        """
-        Retrieve all tracks from a specified playlist or the default playlist.
-        
-        Parameters:
-        - playlist_id: Optional; if not provided, the instance's playlist_id will be used.
-        
-        Returns:
-        - A list of track dictionaries with relevant details, including ID, name, artists, and URI.
-        """
-        target_playlist_id = playlist_id or self.playlist_id
-        if not target_playlist_id:
-            raise ValueError("No playlist ID provided")
 
-        tracks = []
-        offset = 0
-        limit = 100  # Spotify API limit per request
-
+    def get_playlist_tracks(self):
+        """Retrieve tracks from the specified playlist."""
         try:
-            while True:
-                response = self.sp.playlist_items(
-                    target_playlist_id,
-                    offset=offset,
-                    limit=limit,
-                    fields="items(track(id, name, artists(name), uri)), next"
-                )
+            # Ensure the Spotify client is available
+            if not self.spotify_client:
+                raise SpotifyAuthError("Spotify client is not initialized.")
 
-                # Extract track details, ensuring each track has valid data
-                for item in response['items']:
-                    track = item['track']
-                    if track and track.get('id'):
-                        track_data = {
-                            'id': track['id'],
-                            'name': track['name'],
-                            'artists': [artist['name'] for artist in track['artists']],
-                            'uri': track['uri']
-                        }
-                        tracks.append(track_data)
-                    else:
-                        logger.warning("Skipping track with missing or invalid ID")
-
-                # Check if there's a next page
-                if not response.get('next'):
-                    break
-
-                # Move to the next batch
-                offset += limit
-
-            logger.info(f"Retrieved {len(tracks)} tracks from playlist {target_playlist_id}")
-            return tracks
-
+            # Fetch playlist tracks
+            results = self.spotify_client.playlist_tracks(self.playlist_id)
+            tracks = results['items']
+            track_info = []
+            
+            for item in tracks:
+                track = item['track']
+                track_info.append({
+                    'id': track['id'],
+                    'name': track['name'],
+                    'artists': [artist['name'] for artist in track['artists']],
+                    'popularity': track['popularity'],
+                    'energy': track.get('energy', None)
+                })
+            
+            return track_info
+        
         except Exception as e:
-            logger.error(f"Error retrieving tracks for playlist {target_playlist_id}: {str(e)}")
+            logger.error(f"Error fetching tracks for playlist {self.playlist_id}: {str(e)}")
             raise
     
 
