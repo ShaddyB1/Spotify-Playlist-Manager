@@ -185,6 +185,22 @@ class SpotifyService:
             return f(*args, **kwargs)
         return decorated_function
 
+    def clear_auth(self):
+    """Clear all authentication data."""
+    try:
+        # Clear session data
+        session.clear()
+        
+        # Clear OAuth cache if exists
+        oauth = self.create_oauth()
+        if oauth.cache_handler:
+            oauth.cache_handler.save_token_to_cache(None)
+            
+        logger.info("Successfully cleared authentication data")
+    except Exception as e:
+        logger.error(f"Error clearing auth: {str(e)}")
+        raise
+
     def update_playlist(self, playlist_id, tracks_to_remove=None, tracks_to_add=None):
         """Update a playlist by removing and/or adding tracks."""
         try:
