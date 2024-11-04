@@ -94,8 +94,6 @@ class SpotifyPlaylistManager:
         """Optimize playlist based on given criteria."""
         try:
             logger.info(f"Starting playlist optimization with criteria: {criteria}")
-            
-           t
             analysis = self.analyze_tracks()
             
             tracks_to_remove = []
