@@ -43,17 +43,6 @@ class SpotifyPlaylistManager:
             logger.error(f"Failed to initialize Spotify client: {str(e)}")
             raise
 
-    def convert_to_serializable(self, data):
-        """Convert complex data types to serializable Python types."""
-        if isinstance(data, defaultdict):
-            return dict(data)
-        elif isinstance(data, (set, dict.items().__class__)):
-            return list(data)
-        elif isinstance(data, dict):
-            return {k: self.convert_to_serializable(v) for k, v in data.items()}
-        elif isinstance(data, (list, tuple)):
-            return [self.convert_to_serializable(x) for x in data]
-        return data
 
     def get_playlist_tracks(self) -> List[Dict]:
         """Get all tracks from the playlist with pagination."""
