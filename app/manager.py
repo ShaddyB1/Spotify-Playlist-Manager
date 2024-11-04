@@ -89,7 +89,6 @@ class SpotifyPlaylistManager:
 
 
     
-
     def optimize_playlist(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
         """Optimize playlist based on given criteria."""
         try:
@@ -115,7 +114,6 @@ class SpotifyPlaylistManager:
                 if track['energy'] < min_energy:
                     reasons.append(f"Low energy ({track['energy']*100:.0f}%)")
                     
-                # Add track to removal list if it fails any criteria
                 if reasons:
                     tracks_to_remove.append({
                         'id': track['id'],
@@ -149,7 +147,7 @@ class SpotifyPlaylistManager:
                     'minEnergy': min_energy,
                     'autoRemove': criteria.get('autoRemove', False)
                 },
-                'playlistName': analysis['playlist_name']
+                'playlistName': analysis.get('playlist_name', '')
             }
             
             logger.info(f"Optimization complete. Found {len(tracks_to_remove)} tracks to remove.")
