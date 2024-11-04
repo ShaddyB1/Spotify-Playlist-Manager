@@ -75,9 +75,15 @@ class SpotifyPlaylistManager:
     def analyze_tracks(self) -> Dict[str, Any]:
         """Analyze tracks for potential removal based on multiple factors."""
         try:
+            logger.info("Starting get_playlist_tracks")
             tracks = self.get_playlist_tracks()
-            recent_plays = self.sp.current_user_recently_played(limit=50)
+            logger.info(f"Retrieved {len(tracks)} tracks")
             
+            logger.info("Getting recently played tracks")
+            recent_plays = self.sp.current_user_recently_played(limit=50)
+            logger.info(f"Retrieved {len(recent_plays['items'])} recent plays")
+            
+            logger.info("Creating recent plays lookup")
             recent_plays_lookup = {
                 item['track']['id']: {
                     'played_at': datetime.fromisoformat(item['played_at'].replace('Z', '+00:00')),
@@ -98,44 +104,54 @@ class SpotifyPlaylistManager:
                 'decade_distribution': defaultdict(int)
             }
             
+            logger.info("Starting track analysis loop")
             track_ids = set()
             
-            for track in tracks:
-                if not track['track']:
-                    continue
+            for i, track in enumerate(tracks):
+                try:
+                    if not track['track']:
+                        logger.warning(f"Skipping track at index {i} - no track data")
+                        continue
                     
-                track_id = track['track']['id']
-                
-                # Check for duplicates
-                if track_id in track_ids:
-                    analysis['duplicates'].append(track['track']['name'])
-                track_ids.add(track_id)
-                
-                track_info = {
-                    'id': track_id,
-                    'name': track['track']['name'],
-                    'artists': [artist['name'] for artist in track['track']['artists']],
-                    'added_at': track['added_at'],
-                    'popularity': track['track']['popularity'],
-                    'duration_ms': track['track']['duration_ms'],
-                    'explicit': track['track']['explicit'],
-                    'preview_url': track['track']['preview_url'],
-                    'energy': self.get_energy(track_id)
-                }
-                
-                analysis['popularity_distribution'][track_info['popularity'] // 10 * 10] += 1
-                for artist in track_info['artists']:
-                    analysis['artist_distribution'][artist] += 1
-                
-                if track_id in recent_plays_lookup:
-                    track_info['last_played'] = recent_plays_lookup[track_id]['played_at'].isoformat()
-                    analysis['played_tracks'] += 1
-                else:
-                    track_info['last_played'] = None
-                    analysis['inactive_tracks'] += 1
-                
-                analysis['track_details'].append(track_info)
+                    track_id = track['track']['id']
+                    
+                    # Check for duplicates
+                    if track_id in track_ids:
+                        analysis['duplicates'].append(track['track']['name'])
+                    track_ids.add(track_id)
+                    
+                    logger.debug(f"Processing track: {track['track']['name']}")
+                    
+                    track_info = {
+                        'id': track_id,
+                        'name': track['track']['name'],
+                        'artists': [artist['name'] for artist in track['track']['artists']],
+                        'added_at': track['added_at'],
+                        'popularity': track['track']['popularity'],
+                        'duration_ms': track['track']['duration_ms'],
+                        'explicit': track['track']['explicit'],
+                        'preview_url': track['track']['preview_url'],
+                        'energy': self.get_energy(track_id)
+                    }
+                    
+                    analysis['popularity_distribution'][track_info['popularity'] // 10 * 10] += 1
+                    for artist in track_info['artists']:
+                        analysis['artist_distribution'][artist] += 1
+                    
+                    if track_id in recent_plays_lookup:
+                        track_info['last_played'] = recent_plays_lookup[track_id]['played_at'].isoformat()
+                        analysis['played_tracks'] += 1
+                    else:
+                        track_info['last_played'] = None
+                        analysis['inactive_tracks'] += 1
+                    
+                    analysis['track_details'].append(track_info)
+                    
+                except Exception as track_error:
+                    logger.error(f"Error processing track at index {i}: {str(track_error)}")
+                    continue
             
+            logger.info("Calculating analysis summaries")
             analysis.update({
                 'average_popularity': sum(t['popularity'] for t in analysis['track_details']) / len(analysis['track_details']) if analysis['track_details'] else 0,
                 'total_duration_ms': sum(t['duration_ms'] for t in analysis['track_details']),
@@ -143,32 +159,15 @@ class SpotifyPlaylistManager:
                 'preview_available': sum(1 for t in analysis['track_details'] if t['preview_url']),
                 'average_energy': sum(t['energy'] for t in analysis['track_details']) / len(analysis['track_details']) if analysis['track_details'] else 0
             })
-
-            final_analysis = {
-            'total_tracks': analysis['total_tracks'],
-            'played_tracks': analysis['played_tracks'],
-            'skipped_tracks': analysis['skipped_tracks'],
-            'inactive_tracks': analysis['inactive_tracks'],
-            'duplicates': list(analysis['duplicates']),
-            'track_details': list(analysis['track_details']),
-            'genre_distribution': dict(analysis['genre_distribution']),
-            'artist_distribution': dict(analysis['artist_distribution']),
-            'popularity_distribution': dict(analysis['popularity_distribution']),
-            'decade_distribution': dict(analysis['decade_distribution']),
-            'average_popularity': analysis['average_popularity'],
-            'total_duration_ms': analysis['total_duration_ms'],
-            'explicit_tracks': analysis['explicit_tracks'],
-            'preview_available': analysis['preview_available'],
-            'average_energy': analysis['average_energy']
-        }
-
             
+            logger.info("Converting analysis to serializable format")
+            final_analysis = self.convert_to_serializable(analysis)
             
             logger.info(f"Completed analysis for playlist {self.playlist_id}")
             return final_analysis
             
         except Exception as e:
-            logger.error(f"Error analyzing tracks: {str(e)}")
+            logger.error(f"Error analyzing tracks: {str(e)}", exc_info=True)  # Added exc_info=True
             raise PlaylistAnalysisError(f"Failed to analyze tracks: {str(e)}")
 
     def get_similar_tracks(self, limit: int = 20) -> List[Dict]:
