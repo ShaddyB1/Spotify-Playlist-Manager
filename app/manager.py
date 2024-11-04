@@ -84,55 +84,58 @@ class SpotifyPlaylistManager:
             return [self.convert_to_serializable(x) for x in data]
         return data
 
-def optimize_playlist(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
-    """Optimize playlist based on given criteria."""
-    try:
-        logger.info(f"Starting playlist optimization with criteria: {criteria}")
-        
-       t
-        analysis = self.analyze_tracks()
-        
-        tracks_to_remove = []
-        for track in analysis['track_details']:
-            reasons = []
+
+    
+
+    def optimize_playlist(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
+        """Optimize playlist based on given criteria."""
+        try:
+            logger.info(f"Starting playlist optimization with criteria: {criteria}")
+            
+           t
+            analysis = self.analyze_tracks()
+            
+            tracks_to_remove = []
+            for track in analysis['track_details']:
+                reasons = []
+                
+               
+                if track['popularity'] < int(criteria.get('minPopularity', 30)):
+                    reasons.append(f"Low popularity ({track['popularity']}%)")
+                
+                if 'energy' in track and track['energy'] < float(criteria.get('minEnergy', 0.2)):
+                    reasons.append(f"Low energy ({track['energy']*100:.0f}%)")
+                
+                if reasons:
+                    tracks_to_remove.append({
+                        'id': track['id'],
+                        'name': track['name'],
+                        'artist': track['artists'][0],
+                        'reason': ', '.join(reasons)
+                    })
             
            
-            if track['popularity'] < int(criteria.get('minPopularity', 30)):
-                reasons.append(f"Low popularity ({track['popularity']}%)")
+            removed_tracks = []
+            if criteria.get('autoRemove'):
+                track_uris = [f"spotify:track:{track['id']}" for track in tracks_to_remove]
+                for i in range(0, len(track_uris), 100):  # Remove in batches of 100
+                    batch = track_uris[i:i+100]
+                    self.sp.playlist_remove_all_occurrences_of_items(self.playlist_id, batch)
+                    removed_tracks.extend(batch)
             
-            if 'energy' in track and track['energy'] < float(criteria.get('minEnergy', 0.2)):
-                reasons.append(f"Low energy ({track['energy']*100:.0f}%)")
+            result = {
+                'tracksAnalyzed': len(analysis['track_details']),
+                'tracksToRemove': tracks_to_remove,
+                'tracksRemoved': len(removed_tracks) if criteria.get('autoRemove') else 0,
+                'criteriaUsed': criteria
+            }
             
-            if reasons:
-                tracks_to_remove.append({
-                    'id': track['id'],
-                    'name': track['name'],
-                    'artist': track['artists'][0],
-                    'reason': ', '.join(reasons)
-                })
-        
-       
-        removed_tracks = []
-        if criteria.get('autoRemove'):
-            track_uris = [f"spotify:track:{track['id']}" for track in tracks_to_remove]
-            for i in range(0, len(track_uris), 100):  # Remove in batches of 100
-                batch = track_uris[i:i+100]
-                self.sp.playlist_remove_all_occurrences_of_items(self.playlist_id, batch)
-                removed_tracks.extend(batch)
-        
-        result = {
-            'tracksAnalyzed': len(analysis['track_details']),
-            'tracksToRemove': tracks_to_remove,
-            'tracksRemoved': len(removed_tracks) if criteria.get('autoRemove') else 0,
-            'criteriaUsed': criteria
-        }
-        
-        logger.info(f"Optimization completed. Found {len(tracks_to_remove)} tracks to remove.")
-        return self.convert_to_serializable(result)
-        
-    except Exception as e:
-        logger.error(f"Optimization error: {str(e)}", exc_info=True)
-        raise Exception(f"Failed to optimize playlist: {str(e)}")
+            logger.info(f"Optimization completed. Found {len(tracks_to_remove)} tracks to remove.")
+            return self.convert_to_serializable(result)
+            
+        except Exception as e:
+            logger.error(f"Optimization error: {str(e)}", exc_info=True)
+            raise Exception(f"Failed to optimize playlist: {str(e)}")
 
     
 
@@ -271,9 +274,10 @@ def optimize_playlist(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
                     'active_percentage': 0
                 })
             
+            # Convert defaultdict to regular dict and sort distributions
             final_analysis = self.convert_to_serializable(analysis)
             
-       
+            # Sort distributions by value
             for dist_key in ['artist_distribution', 'popularity_distribution', 'decade_distribution']:
                 if dist_key in final_analysis:
                     final_analysis[dist_key] = dict(sorted(
