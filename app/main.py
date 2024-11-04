@@ -171,24 +171,31 @@ def dashboard():
 @rate_limit
 def analyze_playlist(playlist_id):
     try:
+        logger.info(f"Starting analysis for playlist: {playlist_id}")
         manager = SpotifyPlaylistManager(playlist_id)
         
         # Verify playlist exists
         if not manager.verify_playlist():
+            logger.error(f"Playlist {playlist_id} not found or not accessible")
             flash('Playlist not found or not accessible', 'error')
             return redirect(url_for('dashboard'))
-            
-        logger.info(f"Starting analysis for playlist: {playlist_id}")
+        
         analysis = manager.analyze_tracks()
         
         if not analysis:
-            flash('No analysis data available', 'error')
+            logger.error("Analysis returned no data")
+            flash('Analysis failed - no data returned', 'error')
             return redirect(url_for('dashboard'))
-            
+        
         return render_template('analysis.html', analysis=analysis)
-    except Exception as e:
+        
+    except PlaylistAnalysisError as e:
         logger.error(f"Analysis error: {str(e)}", exc_info=True)
-        flash('Failed to analyze playlist', 'error')
+        flash(str(e), 'error')
+        return redirect(url_for('dashboard'))
+    except Exception as e:
+        logger.error(f"Unexpected error during analysis: {str(e)}", exc_info=True)
+        flash('An unexpected error occurred during analysis', 'error')
         return redirect(url_for('dashboard'))
 
 @app.route('/api/playlist/<playlist_id>/similar', methods=['GET'])
@@ -273,6 +280,14 @@ def optimize_playlist(playlist_id):
         if not criteria:
             return jsonify({'error': 'No optimization criteria provided'}), 400
             
+        # Validate criteria
+        try:
+            criteria['minPopularity'] = int(criteria.get('minPopularity', 30))
+            criteria['minEnergy'] = float(criteria.get('minEnergy', 0.2))
+            criteria['autoRemove'] = bool(criteria.get('autoRemove', False))
+        except (ValueError, TypeError) as e:
+            return jsonify({'error': f'Invalid criteria format: {str(e)}'}), 400
+            
         manager = SpotifyPlaylistManager(playlist_id)
         
         # Verify playlist exists
@@ -282,9 +297,12 @@ def optimize_playlist(playlist_id):
         result = manager.optimize_playlist(criteria)
         return jsonify(result)
         
-    except Exception as e:
+    except PlaylistAnalysisError as e:
         logger.error(f"Optimization error: {str(e)}", exc_info=True)
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Unexpected error during optimization: {str(e)}", exc_info=True)
+        return jsonify({'error': 'An unexpected error occurred during optimization'}), 500
 
 @app.route('/logout', methods=['POST'])
 def logout():
