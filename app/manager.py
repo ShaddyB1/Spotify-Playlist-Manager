@@ -142,9 +142,29 @@ class SpotifyPlaylistManager:
                 'preview_available': sum(1 for t in analysis['track_details'] if t['preview_url']),
                 'average_energy': sum(t['energy'] for t in analysis['track_details']) / len(analysis['track_details']) if analysis['track_details'] else 0
             })
+
+            final_analysis = {
+            'total_tracks': analysis['total_tracks'],
+            'played_tracks': analysis['played_tracks'],
+            'skipped_tracks': analysis['skipped_tracks'],
+            'inactive_tracks': analysis['inactive_tracks'],
+            'duplicates': list(analysis['duplicates']),
+            'track_details': list(analysis['track_details']),
+            'genre_distribution': dict(analysis['genre_distribution']),
+            'artist_distribution': dict(analysis['artist_distribution']),
+            'popularity_distribution': dict(analysis['popularity_distribution']),
+            'decade_distribution': dict(analysis['decade_distribution']),
+            'average_popularity': analysis['average_popularity'],
+            'total_duration_ms': analysis['total_duration_ms'],
+            'explicit_tracks': analysis['explicit_tracks'],
+            'preview_available': analysis['preview_available'],
+            'average_energy': analysis['average_energy']
+        }
+
+            
             
             logger.info(f"Completed analysis for playlist {self.playlist_id}")
-            return analysis
+            return final_analysis
             
         except Exception as e:
             logger.error(f"Error analyzing tracks: {str(e)}")
