@@ -19,6 +19,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+app.config.update(
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+)
+
 def create_app():
     app = Flask(__name__)
     
