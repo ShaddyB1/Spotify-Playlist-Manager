@@ -357,6 +357,17 @@ class SpotifyPlaylistManager:
             logger.error(f"Error finding similar tracks: {str(e)}")
             raise
 
+    def verify_playlist(self) -> bool:
+    """Verify that the playlist exists and is accessible."""
+    try:
+        playlist = self.sp.playlist(self.playlist_id, fields='id,name')
+        return bool(playlist and playlist.get('id'))
+    except Exception as e:
+        logger.error(f"Error verifying playlist {self.playlist_id}: {str(e)}")
+        return False
+
+    
+
     def add_similar_tracks(self, track_ids: List[str]) -> bool:
         """Add similar tracks to the playlist."""
         try:
