@@ -1,9 +1,9 @@
+import os
 from spotipy import Spotify, SpotifyException
 from spotipy.oauth2 import SpotifyOAuth
 from flask import session, redirect, url_for
-import logging
-import os
 from functools import wraps
+import logging
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +13,7 @@ class SpotifyAuthError(Exception):
 
 class SpotifyService:
     def __init__(self):
+        """Initialize the Spotify service with OAuth configuration."""
         self.client_id = os.getenv('SPOTIFY_CLIENT_ID')
         self.client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
         self.redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI')
@@ -61,6 +62,7 @@ class SpotifyService:
                 raise SpotifyAuthError("Failed to get token information")
             
             session['token_info'] = token_info
+            session['created_at'] = datetime.now().isoformat()
             logger.info("Successfully obtained token information")
             return token_info
         except Exception as e:
@@ -73,6 +75,7 @@ class SpotifyService:
             oauth = self.create_oauth()
             new_token = oauth.refresh_access_token(token_info['refresh_token'])
             session['token_info'] = new_token
+            session['created_at'] = datetime.now().isoformat()
             return new_token
         except Exception as e:
             logger.error(f"Error refreshing token: {str(e)}")
@@ -85,14 +88,48 @@ class SpotifyService:
             if not token_info:
                 return None
 
-            oauth = self.create_oauth()
-            if oauth.is_token_expired(token_info):
+            if self.is_token_expired(token_info):
                 token_info = self.refresh_token(token_info)
 
             return Spotify(auth=token_info['access_token'])
         except Exception as e:
             logger.error(f"Error getting Spotify client: {str(e)}")
             return None
+
+    def is_token_expired(self, token_info):
+        """Check if the token is expired."""
+        try:
+            oauth = self.create_oauth()
+            return oauth.is_token_expired(token_info)
+        except Exception as e:
+            logger.error(f"Error checking token expiration: {str(e)}")
+            return True
+
+    def clear_auth(self):
+        """Clear all authentication data."""
+        try:
+            # Clear session data
+            session.clear()
+            
+            # Clear OAuth cache if exists
+            oauth = self.create_oauth()
+            if oauth.cache_handler:
+                oauth.cache_handler.save_token_to_cache(None)
+                
+            logger.info("Successfully cleared authentication data")
+        except Exception as e:
+            logger.error(f"Error clearing auth: {str(e)}")
+            raise
+
+    @staticmethod
+    def require_auth(f):
+        """Decorator to require Spotify authentication."""
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not session.get('token_info'):
+                return redirect(url_for('login'))
+            return f(*args, **kwargs)
+        return decorated_function
 
     def get_current_user(self):
         """Get current user's profile information."""
@@ -125,102 +162,4 @@ class SpotifyService:
             return playlists
         except Exception as e:
             logger.error(f"Error getting user playlists: {str(e)}")
-            raise
-
-    def get_playlist_tracks(self, playlist_id):
-        """Get all tracks from a playlist."""
-        try:
-            sp = self.get_spotify_client()
-            if not sp:
-                raise SpotifyAuthError("No valid Spotify client")
-
-            tracks = []
-            results = sp.playlist_tracks(playlist_id)
-            
-            while results:
-                tracks.extend([
-                    {
-                        'track': item['track'],
-                        'added_at': item['added_at']
-                    }
-                    for item in results['items'] if item['track']
-                ])
-                
-                if results['next']:
-                    results = sp.next(results)
-                else:
-                    break
-
-            return tracks
-        except Exception as e:
-            logger.error(f"Error getting playlist tracks: {str(e)}")
-            raise
-
-    def get_audio_features(self, track_ids):
-        """Get audio features for multiple tracks."""
-        try:
-            sp = self.get_spotify_client()
-            if not sp:
-                raise SpotifyAuthError("No valid Spotify client")
-
-            # Split track_ids into chunks of 100 (Spotify API limit)
-            features = []
-            for i in range(0, len(track_ids), 100):
-                chunk = track_ids[i:i + 100]
-                chunk_features = sp.audio_features(chunk)
-                features.extend([f for f in chunk_features if f])
-
-            return features
-        except Exception as e:
-            logger.error(f"Error getting audio features: {str(e)}")
-            raise
-
-    @staticmethod
-    def require_auth(f):
-        """Decorator to require Spotify authentication."""
-        @wraps(f)
-        def decorated_function(*args, **kwargs):
-            if not session.get('token_info'):
-                return redirect(url_for('login'))
-            return f(*args, **kwargs)
-        return decorated_function
-
-    def clear_auth(self):
-    """Clear all authentication data."""
-    try:
-        # Clear session data
-        session.clear()
-        
-        # Clear OAuth cache if exists
-        oauth = self.create_oauth()
-        if oauth.cache_handler:
-            oauth.cache_handler.save_token_to_cache(None)
-            
-        logger.info("Successfully cleared authentication data")
-    except Exception as e:
-        logger.error(f"Error clearing auth: {str(e)}")
-        raise
-
-    def update_playlist(self, playlist_id, tracks_to_remove=None, tracks_to_add=None):
-        """Update a playlist by removing and/or adding tracks."""
-        try:
-            sp = self.get_spotify_client()
-            if not sp:
-                raise SpotifyAuthError("No valid Spotify client")
-
-            if tracks_to_remove:
-                # Remove tracks in batches of 100
-                for i in range(0, len(tracks_to_remove), 100):
-                    batch = tracks_to_remove[i:i + 100]
-                    sp.playlist_remove_all_occurrences_of_items(playlist_id, batch)
-
-            if tracks_to_add:
-                # Add tracks in batches of 100
-                for i in range(0, len(tracks_to_add), 100):
-                    batch = tracks_to_add[i:i + 100]
-                    sp.playlist_add_items(playlist_id, batch)
-
-            return True
-        except Exception as e:
-            logger.error(f"Error updating playlist: {str(e)}")
             raise
