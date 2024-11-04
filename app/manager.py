@@ -80,31 +80,22 @@ class SpotifyPlaylistManager:
 
 
     def get_playlist_tracks(self):
-        """Retrieve tracks from the specified playlist."""
+        """Retrieve tracks from the playlist."""
         try:
-            # Ensure the Spotify client is available
-            if not self.spotify_client:
-                raise SpotifyAuthError("Spotify client is not initialized.")
-
-            # Fetch playlist tracks
-            results = self.spotify_client.playlist_tracks(self.playlist_id)
-            tracks = results['items']
-            track_info = []
-            
-            for item in tracks:
+            results = self.sp.playlist_tracks(self.playlist_id)
+            tracks = []
+            for item in results['items']:
                 track = item['track']
-                track_info.append({
+                tracks.append({
                     'id': track['id'],
                     'name': track['name'],
-                    'artists': [artist['name'] for artist in track['artists']],
                     'popularity': track['popularity'],
-                    'energy': track.get('energy', None)
+                    'artists': [artist['name'] for artist in track['artists']],
+                    'energy': self.get_energy(track['id'])  
                 })
-            
-            return track_info
-        
+            return tracks
         except Exception as e:
-            logger.error(f"Error fetching tracks for playlist {self.playlist_id}: {str(e)}")
+            logger.error(f"Error getting tracks for playlist {self.playlist_id}: {str(e)}")
             raise
     
 
@@ -215,56 +206,30 @@ class SpotifyPlaylistManager:
             logger.error(f"Error analyzing tracks: {str(e)}")
             raise PlaylistAnalysisError(f"Failed to analyze tracks: {str(e)}")
 
-    def get_similar_tracks(self, limit: int = 20) -> List[Dict]:
-        """Get similar tracks based on playlist's current tracks."""
+     def get_similar_tracks(self, limit=10):
+        """Get similar tracks based on current playlist's tracks."""
         try:
-            retries = 3
-            for attempt in range(retries):
-                try:
-                    # Get current tracks
-                    tracks = self.get_playlist_tracks(self.playlist_id)
-                    if not tracks:
-                        logger.error("No tracks found in the playlist to base recommendations on.")
-                        return []
-    
-                    # Get seed tracks and artists
-                    seed_tracks = self._get_seed_tracks(tracks, limit=3)
-                    seed_artists = self._get_seed_artists(tracks, limit=2)
-    
-                    if not seed_tracks and not seed_artists:
-                        logger.error("No valid seed tracks or artists for recommendations.")
-                        return []
-    
-                    # Get recommendations
-                    recommendations = self.sp.recommendations(
-                        seed_tracks=seed_tracks,
-                        seed_artists=seed_artists,
-                        limit=limit,
-                        min_popularity=30
-                    )
-    
-                    # Format and return results
-                    return [
-                        {
-                            'id': track['id'],
-                            'name': track['name'],
-                            'artist': track['artists'][0]['name'],
-                            'popularity': track['popularity'],
-                            'preview_url': track['preview_url'],
-                            'image': track['album']['images'][0]['url'] if track['album']['images'] else None
-                        }
-                        for track in recommendations['tracks']
-                    ]
-                except EOFError:
-                    if attempt == retries - 1:
-                        raise
-                    logger.warning(f"EOF Error in get_similar_tracks, attempt {attempt + 1} of {retries}")
-                    time.sleep(1)
-        except Exception as e:
-            logger.error(f"Error getting similar tracks: {str(e)}")
-            traceback.print_exc()  # Prints detailed error stack trace
-            raise
+            current_tracks = self.get_playlist_tracks()  # No arguments needed here
+            track_ids = [track['id'] for track in current_tracks]
 
+            if not track_ids:
+                logger.warning("No tracks found to find similar songs.")
+                return []
+
+            # Assume you have a method to get recommendations based on track IDs
+            similar_tracks = self.sp.recommendations(seed_tracks=track_ids, limit=limit)
+            similar_tracks_info = [{
+                'id': track['id'],
+                'name': track['name'],
+                'artists': [artist['name'] for artist in track['artists']],
+            } for track in similar_tracks['tracks']]
+
+            logger.info(f"Found {len(similar_tracks_info)} similar tracks for playlist {self.playlist_id}")
+            return similar_tracks_info
+
+        except Exception as e:
+            logger.error(f"Error finding similar tracks: {str(e)}")
+            raise
     
     def add_similar_tracks(self, track_ids: List[str], playlist_id: Optional[str] = None) -> int:
         """Add selected similar tracks to the playlist."""
@@ -290,44 +255,27 @@ class SpotifyPlaylistManager:
     def optimize_playlist(self, criteria):
         """Optimize the playlist based on provided criteria."""
         try:
-            # Fetch current tracks in the playlist
-            current_tracks = self.get_playlist_tracks()
+            current_tracks = self.get_playlist_tracks()  # No arguments needed here
             tracks_to_remove = []
 
-            # Analyze tracks and determine which to remove
-            for track in current_tracks:
-                reasons = []
-                
-                # Check popularity
-                if track['popularity'] < int(criteria.get('minPopularity', 30)):
-                    reasons.append(f"Low popularity ({track['popularity']}%)")
-                
-                # Check energy if available
-                if 'energy' in track and track['energy'] < float(criteria.get('minEnergy', 0.2)):
-                    reasons.append(f"Low energy ({track['energy'] * 100:.0f}%)")
+            # Example criteria: Remove tracks with low popularity
+            if criteria == "low_popularity":
+                popularity_threshold = 50  # Define a threshold for popularity
+                for track in current_tracks:
+                    if track['popularity'] < popularity_threshold:
+                        tracks_to_remove.append(track['id'])
 
-                if reasons:
-                    tracks_to_remove.append({
-                        'id': track['id'],
-                        'name': track['name'],
-                        'artist': track['artists'][0]['name'],
-                        'reason': ', '.join(reasons)
-                    })
-
-            # Remove tracks if any
+            # Remove tracks from the playlist
             if tracks_to_remove:
-                self.sp.playlist_remove_all_occurrences_of_items(self.playlist_id, [track['id'] for track in tracks_to_remove])
-                logger.info(f"Removed {len(tracks_to_remove)} tracks from playlist: {self.playlist_id}")
+                self.sp.playlist_remove_all_occurrences_of_items(self.playlist_id, tracks_to_remove)
+                logger.info(f"Removed {len(tracks_to_remove)} tracks from playlist {self.playlist_id} based on criteria '{criteria}'")
+            else:
+                logger.info(f"No tracks removed from playlist {self.playlist_id} based on criteria '{criteria}'")
 
-            return {
-                'message': 'Playlist optimized successfully',
-                'removed_tracks': tracks_to_remove,
-                'total_tracks': len(current_tracks),
-                'affected_tracks': len(tracks_to_remove)
-            }
         except Exception as e:
             logger.error(f"Error optimizing playlist: {str(e)}")
             raise
+
     def update_playlist(self, tracks_to_remove: List[str], tracks_to_add: List[str]) -> bool:
         """Update the playlist by removing and adding tracks."""
         try:
