@@ -171,16 +171,23 @@ def dashboard():
 @rate_limit
 def analyze_playlist(playlist_id):
     try:
-        logger.info(f"Starting analysis for playlist: {playlist_id}")
         manager = SpotifyPlaylistManager(playlist_id)
-        logger.info("SpotifyPlaylistManager initialized successfully")
         
+        # Verify playlist exists
+        if not manager.verify_playlist():
+            flash('Playlist not found or not accessible', 'error')
+            return redirect(url_for('dashboard'))
+            
+        logger.info(f"Starting analysis for playlist: {playlist_id}")
         analysis = manager.analyze_tracks()
-        logger.info("Analysis completed successfully")
         
+        if not analysis:
+            flash('No analysis data available', 'error')
+            return redirect(url_for('dashboard'))
+            
         return render_template('analysis.html', analysis=analysis)
     except Exception as e:
-        logger.error(f"Analysis error: {str(e)}", exc_info=True)  # Added exc_info=True for full traceback
+        logger.error(f"Analysis error: {str(e)}", exc_info=True)
         flash('Failed to analyze playlist', 'error')
         return redirect(url_for('dashboard'))
 
@@ -263,11 +270,20 @@ def analyze_optimization(playlist_id):
 def optimize_playlist(playlist_id):
     try:
         criteria = request.json
+        if not criteria:
+            return jsonify({'error': 'No optimization criteria provided'}), 400
+            
         manager = SpotifyPlaylistManager(playlist_id)
+        
+        # Verify playlist exists
+        if not manager.verify_playlist():
+            return jsonify({'error': 'Playlist not found or not accessible'}), 404
+            
         result = manager.optimize_playlist(criteria)
         return jsonify(result)
+        
     except Exception as e:
-        logger.error(f"Optimization error: {str(e)}")
+        logger.error(f"Optimization error: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/logout', methods=['POST'])
