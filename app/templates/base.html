@@ -8,9 +8,10 @@
     <meta http-equiv="Expires" content="0">
     <title>Spotify Playlist Manager</title>
     
+    <!-- Stylesheets -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -26,6 +27,7 @@
             }
         }
     </script>
+    
     <style>
         .theme-transition {
             transition: background-color 0.3s, color 0.3s;
@@ -58,40 +60,53 @@
         <div class="container mx-auto flex justify-between items-center">
             <div class="flex items-center space-x-4">
                 <h1 class="text-2xl font-bold text-white">
-                    <a href="{{ url_for('index') }}">Spotify Playlist Manager</a>
+                    <a href="{{ url_for('index') }}" class="hover:text-gray-200 transition-colors">
+                        Spotify Playlist Manager
+                    </a>
                 </h1>
                 {% if session.get('token_info') %}
                 <nav class="hidden md:flex space-x-4">
-                    <a href="{{ url_for('dashboard') }}" class="text-white hover:text-gray-200">My Playlists</a>
-                    <a href="#" class="text-white hover:text-gray-200">Analytics</a>
+                    <a href="{{ url_for('dashboard') }}" 
+                       class="text-white hover:text-gray-200 transition-colors">
+                        My Playlists
+                    </a>
                 </nav>
                 {% endif %}
             </div>
 
             <div class="flex items-center space-x-4">
                 <!-- Theme Toggle -->
-                <button id="themeToggle" class="p-2 rounded-full hover:bg-opacity-80 focus:outline-none">
+                <button id="themeToggle" 
+                        class="p-2 rounded-full hover:bg-white hover:bg-opacity-20 transition-colors focus:outline-none focus:ring-2 focus:ring-white"
+                        aria-label="Toggle theme">
                     <svg id="darkIcon" class="w-6 h-6 text-white hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
                     </svg>
                     <svg id="lightIcon" class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"/>
                     </svg>
                 </button>
 
                 {% if session.get('token_info') %}
+                    <!-- User Profile -->
                     {% if session.get('user_info') %}
                     <div class="hidden md:flex items-center space-x-2">
                         {% if session.user_info.image %}
-                        <img src="{{ session.user_info.image }}" alt="Profile" class="w-8 h-8 rounded-full">
+                        <img src="{{ session.user_info.image }}" 
+                             alt="Profile" 
+                             class="w-8 h-8 rounded-full">
                         {% endif %}
                         <span class="text-white">{{ session.user_info.name }}</span>
                     </div>
                     {% endif %}
 
-                    <form action="{{ url_for('logout') }}" method="POST" class="inline-block">
-                        <button type="submit" 
-                                class="bg-black text-white px-6 py-2 rounded-full hover:bg-opacity-80 transition-colors">
+                    <!-- Logout Button -->
+                    <form id="logoutForm" action="{{ url_for('logout') }}" method="POST" class="inline-block">
+                        <button type="button" 
+                                onclick="handleLogout()"
+                                class="bg-black text-white px-6 py-2 rounded-full hover:bg-opacity-80 transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-spotify-green">
                             Logout
                         </button>
                     </form>
@@ -122,13 +137,14 @@
     </div>
 
     <!-- Main Content -->
-    <main>
+    <main class="container mx-auto px-4 py-8">
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Base Scripts -->
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
     <script>
-        // Theme Toggle Functionality
+        // Theme Toggle
         document.addEventListener('DOMContentLoaded', function() {
             const html = document.documentElement;
             const themeToggle = document.getElementById('themeToggle');
@@ -148,7 +164,7 @@
             updateTheme(savedTheme ? savedTheme === 'dark' : prefersDark);
 
             // Theme toggle click handler
-            themeToggle.addEventListener('click', () => {
+            themeToggle?.addEventListener('click', () => {
                 const isDark = !html.classList.contains('dark');
                 updateTheme(isDark);
             });
@@ -163,7 +179,19 @@
             });
         });
 
-        // Loading overlay functions
+        // Logout handling
+        function handleLogout() {
+            // Clear local storage
+            localStorage.clear();
+            
+            // Clear session storage
+            sessionStorage.clear();
+            
+            // Submit logout form
+            document.getElementById('logoutForm')?.submit();
+        }
+
+        // Loading overlay
         window.showLoading = function() {
             document.getElementById('loadingOverlay').classList.remove('hidden');
             document.getElementById('loadingOverlay').classList.add('flex');
