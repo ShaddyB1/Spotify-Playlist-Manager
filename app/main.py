@@ -59,30 +59,42 @@ def login():
 @app.route('/callback')
 def callback():
     try:
-        # Log the callback parameters
         logger.info(f"Callback received - args: {request.args}")
-        
+        error = request.args.get('error')
+        if error:
+            logger.error(f"Spotify auth error: {error}")
+            flash(f'Authentication error: {error}', 'error')
+            return redirect(url_for('index'))
+
         code = request.args.get('code')
         state = request.args.get('state')
+        stored_state = session.get('oauth_state')
+        
+        logger.info(f"State check - Received: {state}, Stored: {stored_state}")
         
         if not code:
             logger.error("No code received in callback")
             flash('Authentication failed: No code received', 'error')
             return redirect(url_for('index'))
         
-        if state != session.get('oauth_state'):
-            logger.error(f"State mismatch: received {state}, expected {session.get('oauth_state')}")
+        if state != stored_state:
+            logger.error(f"State mismatch: received {state}, expected {stored_state}")
             flash('Authentication failed: State verification failed', 'error')
             return redirect(url_for('index'))
 
         # Get token
         token_info = spotify_service.get_token(code)
+        if not token_info:
+            logger.error("No token info received")
+            flash('Authentication failed: No token received', 'error')
+            return redirect(url_for('index'))
+            
         session['token_info'] = token_info
         
         # Get user info
         sp = spotify_service.get_spotify_client()
         if not sp:
-            logger.error("Failed to create Spotify client after token exchange")
+            logger.error("Failed to create Spotify client")
             flash('Failed to initialize Spotify client', 'error')
             return redirect(url_for('index'))
             
@@ -100,7 +112,7 @@ def callback():
         logger.error(f"Callback error: {str(e)}", exc_info=True)
         flash(f'Authentication failed: {str(e)}', 'error')
         return redirect(url_for('index'))
-
+        
 @app.route('/dashboard')
 @spotify_service.require_auth
 def dashboard():
