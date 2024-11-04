@@ -33,12 +33,47 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax'
 )
 
+
+
+
 # Initialize extensions
 CORS(app)
 Session(app)
 
 # Initialize services
 spotify_service = SpotifyService()
+
+app.config.update(
+    SESSION_TYPE='filesystem',
+    SESSION_PERMANENT=False,  # Sessions expire when browser closes
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=1),  # Max session time
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_NAME='spotify_session'  # Unique session name
+)
+
+@app.before_request
+def check_session():
+    """Check session validity before each request."""
+    if 'token_info' in session:
+        # Check if session is expired
+        created_at = session.get('created_at')
+        if created_at:
+            created_at = datetime.fromisoformat(created_at)
+            if datetime.now() - created_at > timedelta(hours=1):
+                session.clear()
+                return redirect(url_for('index'))
+                
+        # Check if token needs refresh
+        if spotify_service.is_token_expired(session['token_info']):
+            try:
+                new_token = spotify_service.refresh_token(session['token_info'])
+                session['token_info'] = new_token
+                session['created_at'] = datetime.now().isoformat()
+            except:
+                session.clear()
+                return redirect(url_for('index'))
 
 @app.route('/')
 def index():
@@ -227,8 +262,33 @@ def optimize_playlist(playlist_id):
 
 @app.route('/logout', methods=['POST'])
 def logout():
-    session.clear()
-    return redirect(url_for('index'))
+    try:
+        # Clear Spotify OAuth token
+        spotify_service.clear_auth()
+        
+        # Clear all session data
+        session.clear()
+        
+        # Clear Flask session
+        session.pop('token_info', None)
+        session.pop('user_info', None)
+        session.pop('oauth_state', None)
+        
+        # Add success message
+        flash('Successfully logged out', 'success')
+        
+        # Force client-side cache clearing
+        response = redirect(url_for('index'))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Logout error: {str(e)}")
+        flash('Error during logout', 'error')
+        return redirect(url_for('index'))
 
 @app.errorhandler(404)
 def not_found_error(error):
