@@ -268,31 +268,24 @@ def optimize_playlist(playlist_id):
 @app.route('/logout', methods=['POST'])
 def logout():
     try:
-        # Clear Spotify OAuth token
-        spotify_service.clear_auth()
+        # Clear Spotify OAuth cache if it exists
+        if spotify_service:
+            spotify_service.clear_auth()
         
-        # Clear all session data
+        # Clear session data
         session.clear()
         
-        # Clear Flask session
-        session.pop('token_info', None)
-        session.pop('user_info', None)
-        session.pop('oauth_state', None)
-        
-        # Add success message
-        flash('Successfully logged out', 'success')
-        
-        # Force client-side cache clearing
+        # Set no-cache headers
         response = redirect(url_for('index'))
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
         
+        flash('Successfully logged out', 'success')
         return response
         
     except Exception as e:
         logger.error(f"Logout error: {str(e)}")
-        flash('Error during logout', 'error')
         return redirect(url_for('index'))
 
 @app.errorhandler(404)
