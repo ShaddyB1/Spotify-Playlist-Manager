@@ -76,7 +76,7 @@ class SpotifyPlaylistManager:
         """Convert complex data types to serializable Python types."""
         if isinstance(data, defaultdict):
             return dict(data)
-        elif isinstance(data, (set, dict.items().__class__)):
+        elif isinstance(data, (set, type({}.items()))):  # Fixed this line
             return list(data)
         elif isinstance(data, dict):
             return {k: self.convert_to_serializable(v) for k, v in data.items()}
