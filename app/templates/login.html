@@ -1,0 +1,446 @@
+{% extends "base.html" %}
+
+{% block head %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Theme Toggle Button -->
+<button id="themeToggle" 
+        class="fixed top-4 right-4 z-50 bg-gray-800 dark:bg-gray-200 p-2 rounded-full shadow-lg transition-colors duration-200"
+        aria-label="Toggle theme">
+    <svg id="darkIcon" class="w-6 h-6 text-gray-200 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+    </svg>
+    <svg id="lightIcon" class="w-6 h-6 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"/>
+    </svg>
+</button>
+
+<!-- Skip to main content link for accessibility -->
+<a href="#main-content" 
+   class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-green-500 text-white px-4 py-2 rounded-md">
+    Skip to main content
+</a>
+<div class="min-h-screen bg-gradient-to-b from-gray-100 to-white dark:from-spotify-black dark:to-green-900 relative overflow-hidden transition-colors duration-300">
+    <!-- Animated Background Elements -->
+    <div class="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
+        <div class="absolute w-96 h-96 bg-green-500 rounded-full filter blur-3xl opacity-20 animate-float parallax" 
+             data-speed="-0.3" style="top: 10%; left: -10%;"></div>
+        <div class="absolute w-96 h-96 bg-blue-500 rounded-full filter blur-3xl opacity-20 animate-float-delayed parallax" 
+             data-speed="0.2" style="top: 50%; right: -10%;"></div>
+        <div class="absolute w-96 h-96 bg-purple-500 rounded-full filter blur-3xl opacity-20 animate-float-reverse parallax" 
+             data-speed="0.1" style="bottom: -10%; left: 50%;"></div>
+    </div>
+    
+    <div id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 relative z-10">
+        <!-- Hero Section -->
+        <div class="text-center" data-aos="fade-up" data-aos-duration="1000">
+            <div class="inline-block" data-aos="fade-down" data-aos-delay="200">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500 bg-opacity-20 text-green-300 dark:text-green-400 mb-4">
+                    <span class="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
+                    <span class="sr-only">Status:</span> Powered by Spotify API
+                </span>
+            </div>
+            <h1 class="text-5xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6 tracking-tight"
+                data-aos="fade-up" data-aos-delay="300">
+                Optimize Your Spotify Experience
+            </h1>
+            <p class="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto mb-12"
+               data-aos="fade-up" data-aos-delay="400">
+                Smart playlist management powered by your listening habits and advanced analytics.
+            </p>
+            <a href="{{ url_for('login') }}" 
+               class="login-button inline-flex items-center bg-green-500 text-white px-8 py-4 rounded-full font-bold hover:bg-green-600 transition-all transform hover:scale-105 duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+               data-aos="fade-up" data-aos-delay="500"
+               role="button"
+               aria-label="Login with Spotify">
+                <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                </svg>
+                <span>Login with Spotify</span>
+                <span class="login-text ml-2 group-hover:translate-x-1 transition-transform">→</span>
+                <div class="loading-spinner ml-2 hidden">
+                    <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                </div>
+            </a>
+        </div>
+        <!-- Interactive Feature Cards -->
+        <div class="grid md:grid-cols-3 gap-8 mt-20">
+            {% for feature in [
+                {
+                    'title': 'Smart Analytics',
+                    'description': 'Get detailed insights into your listening habits and playlist statistics.',
+                    'icon': 'chart',
+                    'color': 'blue',
+                    'features': ['Track popularity trends', 'Genre distribution', 'Listening patterns']
+                },
+                {
+                    'title': 'Smart Optimization',
+                    'description': 'Let AI optimize your playlists based on your listening patterns.',
+                    'icon': 'magic',
+                    'color': 'green',
+                    'features': ['Remove inactive tracks', 'Balance genres', 'Maintain energy flow']
+                },
+                {
+                    'title': 'Similar Songs',
+                    'description': 'Discover new music that perfectly matches your playlist\'s vibe.',
+                    'icon': 'music',
+                    'color': 'purple',
+                    'features': ['Audio analysis matching', 'Artist recommendations', 'Mood-based suggestions']
+                }
+            ] %}
+            <div class="feature-card group" 
+                 data-aos="fade-up" 
+                 data-aos-delay="{{ loop.index * 100 }}"
+                 tabindex="0"
+                 role="button"
+                 aria-expanded="false">
+                <div class="bg-white dark:bg-gray-900 bg-opacity-50 dark:bg-opacity-50 backdrop-blur-lg rounded-xl p-6 transform transition-all duration-300 hover:scale-105 hover:bg-opacity-70 cursor-pointer h-full relative overflow-hidden shadow-lg">
+                    <!-- Hover Effect Background -->
+                    <div class="absolute inset-0 bg-gradient-to-br from-{{ feature.color }}-500 to-transparent opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+                    
+                    <!-- Content -->
+                    <div class="relative z-10">
+                        <div class="w-12 h-12 bg-{{ feature.color }}-500 rounded-full flex items-center justify-center mx-auto mb-4 transform group-hover:scale-110 transition-transform duration-300 feature-icon">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                {% if feature.icon == 'chart' %}
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                {% elif feature.icon == 'magic' %}
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                {% else %}
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                                {% endif %}
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-gray-900 dark:text-white text-center mb-2">{{ feature.title }}</h3>
+                        <p class="text-gray-600 dark:text-gray-400 text-center mb-4">{{ feature.description }}</p>
+                        
+                        <!-- Feature List -->
+                        <div class="feature-list space-y-2 max-h-0 overflow-hidden transition-all duration-300">
+                            {% for item in feature.features %}
+                            <div class="flex items-center text-sm text-gray-600 dark:text-gray-300">
+                                <svg class="w-4 h-4 text-{{ feature.color }}-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span>{{ item }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- How It Works Section -->
+        <div class="mt-24" data-aos="fade-up">
+            <h2 class="text-3xl font-bold text-gray-900 dark:text-white text-center mb-12">How It Works</h2>
+            <div class="relative">
+                <!-- Timeline Line -->
+                <div class="absolute left-1/2 transform -translate-x-1/2 h-full w-1 bg-green-500 opacity-20"></div>
+                
+                <!-- Timeline Items -->
+                <div class="space-y-12">
+                    {% for step in [
+                        {
+                            'title': 'Login with Spotify',
+                            'description': 'Securely connect your Spotify account with just one click.',
+                            'delay': 100
+                        },
+                        {
+                            'title': 'Select Your Playlist',
+                            'description': 'Choose any playlist you want to analyze or optimize.',
+                            'delay': 200
+                        },
+                        {
+                            'title': 'Get Insights',
+                            'description': 'View detailed analytics and recommendations for your music.',
+                            'delay': 300
+                        },
+                        {
+                            'title': 'Optimize',
+                            'description': 'Apply AI-powered optimizations to enhance your playlist.',
+                            'delay': 400
+                        }
+                    ] %}
+                    <div class="relative" data-aos="fade-up" data-aos-delay="{{ step.delay }}">
+                        <div class="flex items-center">
+                            <div class="flex-1 pr-8 text-right">
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-1">{{ step.title }}</h3>
+                                <p class="text-gray-600 dark:text-gray-400">{{ step.description }}</p>
+                            </div>
+                            <div class="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center relative z-10 transform transition-transform hover:scale-110">
+                                <span class="text-white font-bold">{{ loop.index }}</span>
+                            </div>
+                            <div class="flex-1 pl-8">
+                                <!-- Placeholder for visual balance -->
+                                <div class="h-full"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Section -->
+        <div class="mt-24" data-aos="fade-up">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                {% for stat in [
+                    {'number': '500+', 'label': 'Playlists Optimized', 'color': 'green'},
+                    {'number': '50k+', 'label': 'Songs Analyzed', 'color': 'blue'},
+                    {'number': '98%', 'label': 'Happy Users', 'color': 'purple'}
+                ] %}
+                <div class="relative group cursor-pointer" data-aos="fade-up" data-aos-delay="{{ loop.index * 100 }}">
+                    <div class="absolute inset-0 bg-{{ stat.color }}-500 opacity-0 group-hover:opacity-10 rounded-lg transition-opacity duration-300"></div>
+                    <div class="text-center p-6 relative bg-white dark:bg-gray-900 rounded-lg shadow-lg">
+                        <div class="text-4xl font-bold text-gray-900 dark:text-white mb-2 transform transition-transform group-hover:scale-110">
+                            {{ stat.number }}
+                        </div>
+                        <div class="text-gray-600 dark:text-gray-400">{{ stat.label }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- FAQ Section -->
+        <div class="mt-24" data-aos="fade-up">
+            <h2 class="text-3xl font-bold text-gray-900 dark:text-white text-center mb-12">Frequently Asked Questions</h2>
+            <div class="max-w-3xl mx-auto space-y-4">
+                {% for faq in [
+                    {
+                        'question': 'Is it free to use?',
+                        'answer': 'Yes, our service is completely free for all Spotify users.'
+                    },
+                    {
+                        'question': 'How does the optimization work?',
+                        'answer': 'We analyze your playlist using various factors like popularity, energy, and listening patterns to suggest improvements.'
+                    },
+                    {
+                        'question': 'Is my Spotify account secure?',
+                        'answer': 'Yes, we use official Spotify OAuth for authentication and never store your credentials.'
+                    }
+                ] %}
+                <div class="bg-white dark:bg-gray-900 rounded-lg p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-all duration-300 faq-item"
+                     data-aos="fade-up" 
+                     data-aos-delay="{{ loop.index * 100 }}"
+                     tabindex="0"
+                     role="button"
+                     aria-expanded="false">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-gray-900 dark:text-white font-medium">{{ faq.question }}</h3>
+                        <svg class="w-5 h-5 text-gray-500 dark:text-gray-400 transform transition-transform duration-200 faq-icon" 
+                             fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                    <div class="faq-answer hidden mt-2 text-gray-600 dark:text-gray-400 text-sm">
+                        {{ faq.answer }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+/* Animations */
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
+}
+
+@keyframes float-delayed {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
+}
+
+@keyframes float-reverse {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(20px); }
+}
+
+@keyframes bounce-right {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(5px); }
+}
+
+.animate-float {
+    animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+    animation: float-delayed 8s ease-in-out infinite;
+}
+
+.animate-float-reverse {
+    animation: float-reverse 7s ease-in-out infinite;
+}
+
+/* Dark Mode Transitions */
+.theme-transition {
+    transition: background-color 0.3s, color 0.3s;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #1DB954;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #1ed760;
+}
+
+/* Loading Button State */
+.login-button.loading {
+    position: relative;
+    pointer-events: none;
+}
+
+.login-button.loading .login-text {
+    opacity: 0;
+}
+
+.login-button.loading .loading-spinner {
+    display: block;
+}
+
+/* Feature Card Hover Styles */
+.feature-card:hover .feature-list {
+    max-height: 200px;
+}
+
+/* FAQ Hover Effects */
+.faq-item:hover {
+    transform: translateX(4px);
+}
+
+/* Responsive Design Helpers */
+@media (max-width: 640px) {
+    .timeline-line {
+        left: 2.5rem;
+    }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize AOS
+    AOS.init({
+        duration: 800,
+        once: true,
+        offset: 100
+    });
+
+    // Theme Toggle
+    const themeToggle = document.getElementById('themeToggle');
+    const darkIcon = document.getElementById('darkIcon');
+    const lightIcon = document.getElementById('lightIcon');
+    const html = document.documentElement;
+
+    function updateTheme(isDark) {
+        if (isDark) {
+            html.classList.add('dark');
+            darkIcon.classList.add('hidden');
+            lightIcon.classList.remove('hidden');
+        } else {
+            html.classList.remove('dark');
+            darkIcon.classList.remove('hidden');
+            lightIcon.classList.add('hidden');
+        }
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    }
+
+    // Check saved theme or system preference
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme) {
+        updateTheme(savedTheme === 'dark');
+    } else {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        updateTheme(prefersDark);
+    }
+
+    themeToggle.addEventListener('click', () => {
+        const isDark = !html.classList.contains('dark');
+        updateTheme(isDark);
+    });
+
+    // FAQ Accordion
+    document.querySelectorAll('.faq-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const answer = this.querySelector('.faq-answer');
+            const icon = this.querySelector('.faq-icon');
+            
+            // Toggle answer
+            answer.classList.toggle('hidden');
+            
+            // Update aria-expanded
+            this.setAttribute('aria-expanded', answer.classList.contains('hidden') ? 'false' : 'true');
+            
+            // Rotate icon
+            icon.style.transform = answer.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+        });
+
+        // Keyboard accessibility
+        item.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                item.click();
+            }
+        });
+    });
+
+    // Feature card interactions
+    document.querySelectorAll('.feature-card').forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.querySelector('.feature-icon').style.transform = 'scale(1.1) rotate(5deg)';
+        });
+
+        card.addEventListener('mouseleave', function() {
+            this.querySelector('.feature-icon').style.transform = 'scale(1) rotate(0)';
+        });
+    });
+
+    // Loading state for login button
+    document.querySelector('.login-button')?.addEventListener('click', function() {
+        this.classList.add('loading');
+        this.disabled = true;
+    });
+
+    // Parallax effect
+    window.addEventListener('scroll', function() {
+        requestAnimationFrame(() => {
+            document.querySelectorAll('.parallax').forEach(element => {
+                const speed = element.dataset.speed;
+                const yOffset = window.pageYOffset * speed;
+                element.style.transform = `translateY(${yOffset}px)`;
+            });
+        });
+    });
+});
+</script>
+{% endblock %}
+
+
+        
+        

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Spotify Playlist Manager</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'spotify-green': '#1DB954',
+                        'spotify-black': '#191414',
+                        'spotify-gray': '#282828'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .theme-transition {
+            transition: background-color 0.3s, color 0.3s;
+        }
+        /* Light mode styles */
+        html:not(.dark) {
+            background-color: white;
+            color: #1a1a1a;
+        }
+        html:not(.dark) .bg-spotify-gray {
+            background-color: #f3f4f6;
+        }
+        html:not(.dark) .text-gray-400 {
+            color: #6b7280;
+        }
+        /* Loading animation */
+        .skeleton-loading {
+            background: linear-gradient(90deg, #2c2c2c 25%, #3d3d3d 50%, #2c2c2c 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body class="theme-transition min-h-screen bg-white dark:bg-spotify-black text-gray-900 dark:text-white">
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="fixed top-20 right-4 z-50 space-y-2">
+                {% for category, message in messages %}
+                <div class="flash-message bg-{{ category if category != 'message' else 'green-500' }} text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
+        <div class="bg-spotify-gray p-6 rounded-lg flex items-center space-x-4">
+            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
+            <span class="text-white">Loading...</span>
+        </div>
+    </div>
+
+    {% block content %}{% endblock %}
+
+    <script>
+        // Flash message handling
+        document.addEventListener('DOMContentLoaded', () => {
+            const messages = document.querySelectorAll('.flash-message');
+            messages.forEach(message => {
+                setTimeout(() => {
+                    message.style.transform = 'translateX(100%)';
+                    setTimeout(() => message.remove(), 300);
+                }, 5000);
+            });
+        });
+
+        // Loading overlay
+        window.showLoading = function() {
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+            document.getElementById('loadingOverlay').classList.add('flex');
+        }
+
+        window.hideLoading = function() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+            document.getElementById('loadingOverlay').classList.remove('flex');
+        }
+
+        // Error handling
+        window.handleError = function(error) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed top-20 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+            toast.textContent = error.message || 'An error occurred';
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

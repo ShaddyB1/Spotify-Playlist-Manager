@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="min-h-screen bg-gray-100 dark:bg-gray-900 py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-4">{{ error }}</h1>
+            <a href="{{ url_for('index') }}" 
+               class="inline-flex items-center text-green-500 hover:text-green-600">
+                <span>Return to Home</span>
+                <svg class="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

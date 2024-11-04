@@ -1,0 +1,50 @@
+<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+    {{ "%d:%02d"|format(track.duration // 60, track.duration % 60) }}
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- Export Options -->
+<div class="mt-8 flex justify-end space-x-4">
+<button onclick="exportAnalysis('csv')" class="bg-gray-800 text-white px-6 py-2 rounded-full hover:bg-gray-700 transition-colors">
+Export CSV
+</button>
+<button onclick="exportAnalysis('json')" class="bg-gray-800 text-white px-6 py-2 rounded-full hover:bg-gray-700 transition-colors">
+Export JSON
+</button>
+</div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function exportAnalysis(format) {
+const analysis = {{ analysis|tojson|safe }};
+
+if (format === 'csv') {
+let csv = 'Track,Artist,Popularity,Duration,Added\n';
+analysis.tracks.forEach(track => {
+csv += `"${track.name}","${track.artist}",${track.popularity},${track.duration},"${track.added_at}"\n`;
+});
+downloadFile(csv, 'playlist-analysis.csv', 'text/csv');
+} else {
+downloadFile(JSON.stringify(analysis, null, 2), 'playlist-analysis.json', 'application/json');
+}
+}
+
+function downloadFile(content, fileName, contentType) {
+const blob = new Blob([content], { type: contentType });
+const url = window.URL.createObjectURL(blob);
+const a = document.createElement('a');
+a.href = url;
+a.download = fileName;
+a.click();
+window.URL.revokeObjectURL(url);
+}
+</script>
+{% endblock %}
