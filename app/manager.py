@@ -94,50 +94,70 @@ class SpotifyPlaylistManager:
         """Optimize playlist based on given criteria."""
         try:
             logger.info(f"Starting playlist optimization with criteria: {criteria}")
+            
+            # Get track analysis
             analysis = self.analyze_tracks()
             
+            if not analysis['track_details']:
+                raise PlaylistAnalysisError("No tracks found in playlist")
+                
             tracks_to_remove = []
             for track in analysis['track_details']:
                 reasons = []
                 
-               
-                if track['popularity'] < int(criteria.get('minPopularity', 30)):
+                # Check popularity criterion
+                min_popularity = int(criteria.get('minPopularity', 30))
+                if track['popularity'] < min_popularity:
                     reasons.append(f"Low popularity ({track['popularity']}%)")
                 
-                if 'energy' in track and track['energy'] < float(criteria.get('minEnergy', 0.2)):
+                # Check energy criterion
+                min_energy = float(criteria.get('minEnergy', 0.2))
+                if track['energy'] < min_energy:
                     reasons.append(f"Low energy ({track['energy']*100:.0f}%)")
-                
+                    
+                # Add track to removal list if it fails any criteria
                 if reasons:
                     tracks_to_remove.append({
                         'id': track['id'],
                         'name': track['name'],
-                        'artist': track['artists'][0],
-                        'reason': ', '.join(reasons)
+                        'artist': track['artists'][0] if track['artists'] else 'Unknown Artist',
+                        'popularity': track['popularity'],
+                        'energy': track['energy'],
+                        'reasons': reasons
                     })
             
-           
+            # Actually remove tracks if autoRemove is True
             removed_tracks = []
             if criteria.get('autoRemove'):
                 track_uris = [f"spotify:track:{track['id']}" for track in tracks_to_remove]
-                for i in range(0, len(track_uris), 100):  # Remove in batches of 100
+                
+                # Remove tracks in batches of 100
+                for i in range(0, len(track_uris), 100):
                     batch = track_uris[i:i+100]
-                    self.sp.playlist_remove_all_occurrences_of_items(self.playlist_id, batch)
-                    removed_tracks.extend(batch)
+                    try:
+                        self.sp.playlist_remove_all_occurrences_of_items(self.playlist_id, batch)
+                        removed_tracks.extend(batch)
+                    except Exception as e:
+                        logger.error(f"Error removing batch of tracks: {str(e)}")
             
             result = {
                 'tracksAnalyzed': len(analysis['track_details']),
                 'tracksToRemove': tracks_to_remove,
                 'tracksRemoved': len(removed_tracks) if criteria.get('autoRemove') else 0,
-                'criteriaUsed': criteria
+                'criteriaUsed': {
+                    'minPopularity': min_popularity,
+                    'minEnergy': min_energy,
+                    'autoRemove': criteria.get('autoRemove', False)
+                },
+                'playlistName': analysis['playlist_name']
             }
             
-            logger.info(f"Optimization completed. Found {len(tracks_to_remove)} tracks to remove.")
+            logger.info(f"Optimization complete. Found {len(tracks_to_remove)} tracks to remove.")
             return self.convert_to_serializable(result)
             
         except Exception as e:
             logger.error(f"Optimization error: {str(e)}", exc_info=True)
-            raise Exception(f"Failed to optimize playlist: {str(e)}")
-
+            raise PlaylistAnalysisError(f"Failed to optimize playlist: {str(e)}")
 
     
 
