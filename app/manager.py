@@ -206,7 +206,7 @@ class SpotifyPlaylistManager:
             logger.error(f"Error analyzing tracks: {str(e)}")
             raise PlaylistAnalysisError(f"Failed to analyze tracks: {str(e)}")
 
-     def get_similar_tracks(self, limit=10):
+    def get_similar_tracks(self, limit=10):
         """Get similar tracks based on current playlist's tracks."""
         try:
             current_tracks = self.get_playlist_tracks()  # No arguments needed here
