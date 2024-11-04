@@ -2,7 +2,7 @@
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -29,9 +29,12 @@
     </script>
     
     <style>
+        /* Base Transitions */
         .theme-transition {
             transition: background-color 0.3s, color 0.3s;
         }
+
+        /* Theme Colors */
         html:not(.dark) {
             background-color: white;
             color: #1a1a1a;
@@ -42,6 +45,8 @@
         html:not(.dark) .text-gray-400 {
             color: #6b7280;
         }
+
+        /* Loading Animation */
         .skeleton-loading {
             background: linear-gradient(90deg, #2c2c2c 25%, #3d3d3d 50%, #2c2c2c 75%);
             background-size: 200% 100%;
@@ -51,66 +56,156 @@
             0% { background-position: 200% 0; }
             100% { background-position: -200% 0; }
         }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 640px) {
+            .container {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+            
+            .nav-items {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            .text-3xl {
+                font-size: 1.5rem;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr !important;
+            }
+            
+            .mobile-full {
+                width: 100%;
+                margin: 0.5rem 0;
+            }
+            
+            .modal-content {
+                width: 95% !important;
+                margin: 1rem;
+            }
+
+            #mobileMenu {
+                transition: all 0.3s ease-in-out;
+            }
+
+            .mobile-nav-active {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        /* Toast Notifications */
+        .toast-message {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 50;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid #fff;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
     {% block head %}{% endblock %}
 </head>
 <body class="theme-transition min-h-screen bg-white dark:bg-spotify-black text-gray-900 dark:text-white">
     <!-- Navigation Bar -->
     <nav class="bg-spotify-green p-4 sticky top-0 z-50 shadow-lg">
-        <div class="container mx-auto flex justify-between items-center">
-            <div class="flex items-center space-x-4">
-                <h1 class="text-2xl font-bold text-white">
-                    <a href="{{ url_for('index') }}" class="hover:text-gray-200 transition-colors">
-                        Spotify Playlist Manager
-                    </a>
-                </h1>
-                {% if session.get('token_info') %}
-                <nav class="hidden md:flex space-x-4">
-                    <a href="{{ url_for('dashboard') }}" 
-                       class="text-white hover:text-gray-200 transition-colors">
-                        My Playlists
-                    </a>
-                </nav>
-                {% endif %}
-            </div>
+        <div class="container mx-auto">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <!-- Logo and Mobile Menu Button -->
+                <div class="flex items-center w-full md:w-auto justify-between mb-4 md:mb-0">
+                    <h1 class="text-xl md:text-2xl font-bold text-white">
+                        <a href="{{ url_for('index') }}" class="hover:text-gray-200 transition-colors">
+                            Spotify Playlist Manager
+                        </a>
+                    </h1>
+                    <button id="mobileMenuBtn" 
+                            class="md:hidden text-white focus:outline-none p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
+                            aria-label="Toggle menu">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M4 6h16M4 12h16m-7 6h7"/>
+                        </svg>
+                    </button>
+                </div>
 
-            <div class="flex items-center space-x-4">
-                <!-- Theme Toggle -->
-                <button id="themeToggle" 
-                        class="p-2 rounded-full hover:bg-white hover:bg-opacity-20 transition-colors focus:outline-none focus:ring-2 focus:ring-white"
-                        aria-label="Toggle theme">
-                    <svg id="darkIcon" class="w-6 h-6 text-white hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-                    </svg>
-                    <svg id="lightIcon" class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"/>
-                    </svg>
-                </button>
-
-                {% if session.get('token_info') %}
-                    <!-- User Profile -->
-                    {% if session.get('user_info') %}
-                    <div class="hidden md:flex items-center space-x-2">
-                        {% if session.user_info.image %}
-                        <img src="{{ session.user_info.image }}" 
-                             alt="Profile" 
-                             class="w-8 h-8 rounded-full">
-                        {% endif %}
-                        <span class="text-white">{{ session.user_info.name }}</span>
-                    </div>
-                    {% endif %}
-
-                    <!-- Logout Button -->
-                    <form id="logoutForm" action="{{ url_for('logout') }}" method="POST" class="inline-block">
-                        <button type="button" 
-                                onclick="handleLogout()"
-                                class="bg-black text-white px-6 py-2 rounded-full hover:bg-opacity-80 transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-spotify-green">
-                            Logout
+                <!-- Navigation Items -->
+                <div id="mobileMenu" 
+                     class="hidden md:flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6 w-full md:w-auto">
+                    {% if session.get('token_info') %}
+                        <a href="{{ url_for('dashboard') }}" 
+                           class="text-white hover:text-gray-200 transition-colors w-full md:w-auto text-center py-2 md:py-0">
+                            My Playlists
+                        </a>
+                        
+                        <!-- Theme Toggle -->
+                        <button id="themeToggle" 
+                                class="p-2 rounded-full hover:bg-white hover:bg-opacity-20 transition-colors focus:outline-none"
+                                aria-label="Toggle theme">
+                            <svg id="darkIcon" class="w-6 h-6 text-white hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                      d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                            </svg>
+                            <svg id="lightIcon" class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                      d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"/>
+                            </svg>
                         </button>
-                    </form>
-                {% endif %}
+
+                        <!-- User Profile -->
+                        <div class="flex items-center space-x-3">
+                            {% if session.get('user_info') %}
+                                {% if session.user_info.image %}
+                                    <img src="{{ session.user_info.image }}" 
+                                         alt="Profile" 
+                                         class="w-8 h-8 rounded-full">
+                                {% endif %}
+                                <span class="text-white">{{ session.user_info.name }}</span>
+                            {% endif %}
+                        </div>
+
+                        <!-- Logout Button -->
+                        <form id="logoutForm" action="{{ url_for('logout') }}" method="POST" class="w-full md:w-auto">
+                            <button type="button" 
+                                    onclick="handleLogout()"
+                                    class="bg-black text-white px-6 py-2 rounded-full hover:bg-opacity-80 transition-colors w-full md:w-auto focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-spotify-green">
+                                Logout
+                            </button>
+                        </form>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </nav>
@@ -120,9 +215,9 @@
         {% if messages %}
             <div class="fixed top-20 right-4 z-50 space-y-2">
                 {% for category, message in messages %}
-                <div class="flash-message bg-{{ category if category != 'message' else 'green-500' }} text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300">
-                    {{ message }}
-                </div>
+                    <div class="flash-message bg-{{ category if category != 'message' else 'green-500' }} text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300">
+                        {{ message }}
+                    </div>
                 {% endfor %}
             </div>
         {% endif %}
@@ -131,7 +226,7 @@
     <!-- Loading Overlay -->
     <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50">
         <div class="bg-spotify-gray p-6 rounded-lg flex items-center space-x-4">
-            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-500"></div>
+            <div class="spinner"></div>
             <span class="text-white">Loading...</span>
         </div>
     </div>
@@ -141,8 +236,7 @@
         {% block content %}{% endblock %}
     </main>
 
-    <!-- Scripts -->
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <!-- Base Scripts -->
     <script>
         // Theme Toggle
         document.addEventListener('DOMContentLoaded', function() {
@@ -150,7 +244,10 @@
             const themeToggle = document.getElementById('themeToggle');
             const darkIcon = document.getElementById('darkIcon');
             const lightIcon = document.getElementById('lightIcon');
+            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            const mobileMenu = document.getElementById('mobileMenu');
 
+            // Theme functions
             function updateTheme(isDark) {
                 html.classList.toggle('dark', isDark);
                 darkIcon.classList.toggle('hidden', isDark);
@@ -169,6 +266,28 @@
                 updateTheme(isDark);
             });
 
+            // Mobile menu toggle
+            mobileMenuBtn?.addEventListener('click', () => {
+                mobileMenu.classList.toggle('hidden');
+            });
+
+            // Close mobile menu on outside click
+            document.addEventListener('click', (event) => {
+                if (!mobileMenuBtn?.contains(event.target) && 
+                    !mobileMenu?.contains(event.target)) {
+                    mobileMenu?.classList.add('hidden');
+                }
+            });
+
+            // Handle window resize
+            window.addEventListener('resize', () => {
+                if (window.innerWidth > 768) {
+                    mobileMenu?.classList.remove('hidden');
+                } else {
+                    mobileMenu?.classList.add('hidden');
+                }
+            });
+
             // Flash message handling
             const messages = document.querySelectorAll('.flash-message');
             messages.forEach(message => {
@@ -181,11 +300,15 @@
 
         // Logout handling
         function handleLogout() {
-            // Clear local storage
+            // Clear all storage
             localStorage.clear();
-            
-            // Clear session storage
             sessionStorage.clear();
+            
+            // Clear any cookies
+            document.cookie.split(";").forEach(cookie => {
+                const name = cookie.split("=")[0].trim();
+                document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+            });
             
             // Submit logout form
             document.getElementById('logoutForm')?.submit();
@@ -205,7 +328,7 @@
         // Error handling
         window.handleError = function(error) {
             const toast = document.createElement('div');
-            toast.className = 'fixed top-20 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+            toast.className = 'toast-message bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg';
             toast.textContent = error.message || 'An error occurred';
             document.body.appendChild(toast);
 
