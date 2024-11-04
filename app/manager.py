@@ -67,34 +67,38 @@ class SpotifyPlaylistManager:
             raise
 
     def get_playlist_tracks(self, playlist_id) -> List[Dict]:
-    """Get all tracks from the playlist with pagination."""
-    try:
-        tracks = []
-        retries = 3  # Add retry mechanism
+        """Get all tracks from the playlist with pagination."""
+        try:
+            tracks = []
+            retries = 3  # Add retry mechanism
+    
+            for attempt in range(retries):
+                try:
+                    results = self.sp.playlist_tracks(playlist_id)
+                    
+                    while results:
+                        tracks.extend(results['items'])
+                        if results['next']:
+                            results = self.sp.next(results)
+                        else:
+                            break
+    
+                    logger.info(f"Retrieved {len(tracks)} tracks from playlist {playlist_id}")
+                    return tracks
+                except EOFError:
+                    if attempt == retries - 1:  # Last attempt
+                        raise
+                    logger.warning(f"EOF Error, attempt {attempt + 1} of {retries}")
+                    time.sleep(1)  # Wait before retrying
+    
+        except Exception as e:
+            logger.error(f"Error retrieving playlist tracks: {str(e)}")
+            raise PlaylistAnalysisError(f"Failed to get playlist tracks: {str(e)}")
+    
 
-        for attempt in range(retries):
-            try:
-                results = self.sp.playlist_tracks(playlist_id)
-                
-                while results:
-                    tracks.extend(results['items'])
-                    if results['next']:
-                        results = self.sp.next(results)
-                    else:
-                        break
+    
 
-                logger.info(f"Retrieved {len(tracks)} tracks from playlist {playlist_id}")
-                return tracks
-            except EOFError:
-                if attempt == retries - 1:  # Last attempt
-                    raise
-                logger.warning(f"EOF Error, attempt {attempt + 1} of {retries}")
-                time.sleep(1)  # Wait before retrying
-
-    except Exception as e:
-        logger.error(f"Error retrieving playlist tracks: {str(e)}")
-        raise PlaylistAnalysisError(f"Failed to get playlist tracks: {str(e)}")
-
+    
     def analyze_tracks(self, playlist_id: Optional[str] = None) -> Dict[str, Any]:
         """Analyze tracks for potential removal based on multiple factors."""
         try:
