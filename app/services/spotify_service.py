@@ -13,29 +13,31 @@ class SpotifyAuthError(Exception):
 
 class SpotifyService:
     def __init__(self):
-       def __init__(self):
-            self.client_id = os.getenv('SPOTIFY_CLIENT_ID')
-            self.client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
-            self.redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI')
-            self.scope = (
-                "playlist-modify-public playlist-modify-private "
-                "user-library-read user-read-recently-played "
-                "user-read-playback-state playlist-read-private "
-                "playlist-read-collaborative user-top-read"
-    )
+        self.client_id = os.getenv('SPOTIFY_CLIENT_ID')
+        self.client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+        self.redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI')
+        self.scope = (
+            "playlist-modify-public playlist-modify-private "
+            "user-library-read user-read-recently-played "
+            "user-read-playback-state playlist-read-private "
+            "playlist-read-collaborative user-top-read"
+        )
 
     def create_oauth(self):
         """Create SpotifyOAuth instance."""
+        if not all([self.client_id, self.client_secret, self.redirect_uri]):
+            raise SpotifyAuthError("Missing Spotify credentials")
+            
         try:
-            oauth = SpotifyOAuth(
+            return SpotifyOAuth(
                 client_id=self.client_id,
                 client_secret=self.client_secret,
                 redirect_uri=self.redirect_uri,
-                scope=self.scope
+                scope=self.scope,
+                cache_handler=None  # Disable caching
             )
-            return oauth
         except Exception as e:
-            logger.error(f"Error creating SpotifyOAuth: {str(e)}")
+            logger.error(f"Error creating OAuth: {str(e)}")
             raise SpotifyAuthError("Failed to initialize Spotify OAuth")
 
     def get_auth_url(self):
@@ -44,21 +46,26 @@ class SpotifyService:
             oauth = self.create_oauth()
             auth_url = oauth.get_authorize_url()
             session['oauth_state'] = oauth.state
+            logger.info(f"Generated auth URL with state: {oauth.state}")
             return auth_url
         except Exception as e:
             logger.error(f"Error getting auth URL: {str(e)}")
-            raise SpotifyAuthError("Failed to get authorization URL")
+            raise SpotifyAuthError("Failed to generate authorization URL")
 
     def get_token(self, code):
         """Get access token using authorization code."""
         try:
             oauth = self.create_oauth()
-            token_info = oauth.get_access_token(code)
+            token_info = oauth.get_access_token(code, check_cache=False)
+            if not token_info:
+                raise SpotifyAuthError("Failed to get token information")
+            
             session['token_info'] = token_info
+            logger.info("Successfully obtained token information")
             return token_info
         except Exception as e:
             logger.error(f"Error getting token: {str(e)}")
-            raise SpotifyAuthError("Failed to get access token")
+            raise SpotifyAuthError(f"Failed to get access token: {str(e)}")
 
     def refresh_token(self, token_info):
         """Refresh the access token."""
