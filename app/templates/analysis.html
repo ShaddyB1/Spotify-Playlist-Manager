@@ -1,50 +1,146 @@
-<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
-    {{ "%d:%02d"|format(track.duration // 60, track.duration % 60) }}
-</td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
-</div>
-</div>
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-900 dark:text-white mb-2">{{ analysis.playlist_name }}</h2>
+        <p class="text-gray-400">Playlist Analysis</p>
+    </div>
 
-<!-- Export Options -->
-<div class="mt-8 flex justify-end space-x-4">
-<button onclick="exportAnalysis('csv')" class="bg-gray-800 text-white px-6 py-2 rounded-full hover:bg-gray-700 transition-colors">
-Export CSV
-</button>
-<button onclick="exportAnalysis('json')" class="bg-gray-800 text-white px-6 py-2 rounded-full hover:bg-gray-700 transition-colors">
-Export JSON
-</button>
-</div>
-</div>
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="bg-gray-800 rounded-lg p-6">
+            <h3 class="text-gray-400 text-sm mb-1">Total Tracks</h3>
+            <p class="text-2xl font-bold text-white">{{ analysis.total_tracks }}</p>
+        </div>
+        
+        <div class="bg-gray-800 rounded-lg p-6">
+            <h3 class="text-gray-400 text-sm mb-1">Average Popularity</h3>
+            <p class="text-2xl font-bold text-white">{{ "%.1f"|format(analysis.average_popularity) }}</p>
+            <div class="w-full bg-gray-700 rounded-full h-2 mt-2">
+                <div class="bg-green-500 rounded-full h-2" 
+                     style="width: {{ analysis.average_popularity }}%">
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-gray-800 rounded-lg p-6">
+            <h3 class="text-gray-400 text-sm mb-1">Duration</h3>
+            <p class="text-2xl font-bold text-white">{{ (analysis.total_duration_ms / (1000 * 60 * 60))|round(1) }} hours</p>
+        </div>
 
+        <div class="bg-gray-800 rounded-lg p-6">
+            <h3 class="text-gray-400 text-sm mb-1">Activity</h3>
+            <p class="text-2xl font-bold text-white">{{ analysis.played_tracks }} / {{ analysis.total_tracks }}</p>
+            <p class="text-sm text-gray-400 mt-1">Tracks played recently</p>
+        </div>
+    </div>
+
+    <!-- Top Artists -->
+    <div class="mb-8">
+        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Top Artists</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for artist, count in analysis.artist_distribution.items()[:6] %}
+            <div class="bg-gray-800 rounded-lg p-4 flex justify-between items-center">
+                <span class="font-medium text-white">{{ artist }}</span>
+                <span class="text-gray-400">{{ count }} tracks</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Tracks Table -->
+    <div class="bg-gray-800 rounded-lg overflow-hidden shadow-xl">
+        <div class="px-6 py-4 border-b border-gray-700">
+            <h3 class="text-xl font-bold text-white">All Tracks</h3>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-gray-900">
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Track</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Artist</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Popularity</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Energy</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Added</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Duration</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    {% for track in analysis.track_details %}
+                    <tr class="hover:bg-gray-700 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-white">{{ track.name }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-300">{{ track.artists[0] }}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="w-full bg-gray-600 rounded-full h-2">
+                                <div class="bg-green-500 rounded-full h-2" 
+                                     style="width: {{ track.popularity }}%">
+                                </div>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">{{ track.popularity }}%</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="w-full bg-gray-600 rounded-full h-2">
+                                <div class="bg-blue-500 rounded-full h-2" 
+                                     style="width: {{ (track.energy * 100)|round }}%">
+                                </div>
+                            </div>
+                            <div class="text-xs text-gray-400 mt-1">{{ (track.energy * 100)|round }}%</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                            {{ track.added_at.split('T')[0] }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-400">
+                            {{ "%d:%02d"|format(track.duration // 60, track.duration % 60) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Export Options -->
+    <div class="mt-8 flex justify-end space-x-4">
+        <button onclick="exportAnalysis('csv')" class="bg-gray-800 text-white px-6 py-2 rounded-full hover:bg-gray-700 transition-colors">
+            Export CSV
+        </button>
+        <button onclick="exportAnalysis('json')" class="bg-gray-800 text-white px-6 py-2 rounded-full hover:bg-gray-700 transition-colors">
+            Export JSON
+        </button>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
 function exportAnalysis(format) {
-const analysis = {{ analysis|tojson|safe }};
-
-if (format === 'csv') {
-let csv = 'Track,Artist,Popularity,Duration,Added\n';
-analysis.tracks.forEach(track => {
-csv += `"${track.name}","${track.artist}",${track.popularity},${track.duration},"${track.added_at}"\n`;
-});
-downloadFile(csv, 'playlist-analysis.csv', 'text/csv');
-} else {
-downloadFile(JSON.stringify(analysis, null, 2), 'playlist-analysis.json', 'application/json');
-}
+    const analysis = {{ analysis|tojson|safe }};
+    
+    if (format === 'csv') {
+        let csv = 'Track,Artist,Popularity,Duration,Added\n';
+        analysis.track_details.forEach(track => {
+            csv += `"${track.name}","${track.artists[0]}",${track.popularity},${track.duration_ms},"${track.added_at}"\n`;
+        });
+        downloadFile(csv, 'playlist-analysis.csv', 'text/csv');
+    } else {
+        downloadFile(JSON.stringify(analysis, null, 2), 'playlist-analysis.json', 'application/json');
+    }
 }
 
 function downloadFile(content, fileName, contentType) {
-const blob = new Blob([content], { type: contentType });
-const url = window.URL.createObjectURL(blob);
-const a = document.createElement('a');
-a.href = url;
-a.download = fileName;
-a.click();
-window.URL.revokeObjectURL(url);
+    const blob = new Blob([content], { type: contentType });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    window.URL.revokeObjectURL(url);
 }
 </script>
 {% endblock %}
