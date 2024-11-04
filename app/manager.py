@@ -287,73 +287,47 @@ class SpotifyPlaylistManager:
             logger.error(f"Error adding similar tracks: {str(e)}")
             raise
 
-    def optimize_playlist(self, playlist_id: Optional[str] = None, config: Optional[OptimizationConfig] = None) -> Dict[str, Any]:
-        """Optimize the playlist based on given criteria."""
+    def optimize_playlist(self, criteria):
+        """Optimize the playlist based on provided criteria."""
         try:
-            target_playlist_id = playlist_id or self.playlist_id
-            if not target_playlist_id:
-                raise ValueError("No playlist ID provided")
-
-            config = config or OptimizationConfig()
-            analysis = self.analyze_tracks(target_playlist_id)
+            # Fetch current tracks in the playlist
+            current_tracks = self.get_playlist_tracks()
             tracks_to_remove = []
-            removal_reasons = defaultdict(list)
-            current_time = datetime.now()
 
-            for track in analysis['track_details']:
+            # Analyze tracks and determine which to remove
+            for track in current_tracks:
                 reasons = []
-
+                
                 # Check popularity
-                if track['popularity'] < config.min_popularity:
-                    reasons.append("low_popularity")
-
-                # Check energy
-                if track.get('energy', 1.0) < config.min_energy:
-                    reasons.append("low_energy")
-
-                # Check inactivity
-                if not track['last_played']:
-                    added_date = datetime.fromisoformat(track['added_at'].replace('Z', '+00:00'))
-                    if (current_time - added_date).days > config.max_inactive_days:
-                        reasons.append("inactive")
+                if track['popularity'] < int(criteria.get('minPopularity', 30)):
+                    reasons.append(f"Low popularity ({track['popularity']}%)")
+                
+                # Check energy if available
+                if 'energy' in track and track['energy'] < float(criteria.get('minEnergy', 0.2)):
+                    reasons.append(f"Low energy ({track['energy'] * 100:.0f}%)")
 
                 if reasons:
-                    tracks_to_remove.append(track['id'])
-                    for reason in reasons:
-                        removal_reasons[reason].append(track['name'])
+                    tracks_to_remove.append({
+                        'id': track['id'],
+                        'name': track['name'],
+                        'artist': track['artists'][0]['name'],
+                        'reason': ', '.join(reasons)
+                    })
 
-            # Get recommendations for replacement
-            recommendations = []
+            # Remove tracks if any
             if tracks_to_remove:
-                seed_tracks = [t['id'] for t in analysis['track_details'] 
-                             if t['id'] not in tracks_to_remove][:5]
-                recommendations = self.get_similar_tracks(target_playlist_id, len(tracks_to_remove))
-
-            # Update playlist
-            if tracks_to_remove:
-                self.update_playlist(tracks_to_remove, [r['id'] for r in recommendations])
+                self.sp.playlist_remove_all_occurrences_of_items(self.playlist_id, [track['id'] for track in tracks_to_remove])
+                logger.info(f"Removed {len(tracks_to_remove)} tracks from playlist: {self.playlist_id}")
 
             return {
-                'tracks_analyzed': len(analysis['track_details']),
-                'tracks_removed': len(tracks_to_remove),
-                'tracks_added': len(recommendations),
-                'removal_reasons': dict(removal_reasons),
-                'playlist_stats': {
-                    'before': {
-                        'total_tracks': analysis['total_tracks'],
-                        'average_popularity': analysis['average_popularity']
-                    },
-                    'after': {
-                        'total_tracks': analysis['total_tracks'] - len(tracks_to_remove) + len(recommendations),
-                        'estimated_popularity': analysis['average_popularity'] * 1.1  # Estimated improvement
-                    }
-                }
+                'message': 'Playlist optimized successfully',
+                'removed_tracks': tracks_to_remove,
+                'total_tracks': len(current_tracks),
+                'affected_tracks': len(tracks_to_remove)
             }
-
         except Exception as e:
             logger.error(f"Error optimizing playlist: {str(e)}")
             raise
-
     def update_playlist(self, tracks_to_remove: List[str], tracks_to_add: List[str]) -> bool:
         """Update the playlist by removing and adding tracks."""
         try:
