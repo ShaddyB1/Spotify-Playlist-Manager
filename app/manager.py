@@ -67,36 +67,60 @@ class SpotifyPlaylistManager:
             logger.error(f"Failed to initialize Spotify client: {str(e)}")
             raise
 
-    def get_playlist_tracks(self, playlist_id) -> List[Dict]:
-        """Get all tracks from the playlist with pagination."""
-        try:
-            tracks = []
-            retries = 3  # Add retry mechanism
-    
-            for attempt in range(retries):
-                try:
-                    results = self.sp.playlist_tracks(playlist_id)
-                    
-                    while results:
-                        tracks.extend(results['items'])
-                        if results['next']:
-                            results = self.sp.next(results)
-                        else:
-                            break
-    
-                    logger.info(f"Retrieved {len(tracks)} tracks from playlist {playlist_id}")
-                    return tracks
-                except EOFError:
-                    if attempt == retries - 1:  # Last attempt
-                        raise
-                    logger.warning(f"EOF Error, attempt {attempt + 1} of {retries}")
-                    time.sleep(1)  # Wait before retrying
-    
-        except Exception as e:
-            logger.error(f"Error retrieving playlist tracks: {str(e)}")
-            raise PlaylistAnalysisError(f"Failed to get playlist tracks: {str(e)}")
-    
+    def get_playlist_tracks(self, playlist_id: Optional[str] = None) -> List[dict]:
+        """
+        Retrieve all tracks from a specified playlist or the default playlist.
+        
+        Parameters:
+        - playlist_id: Optional; if not provided, the instance's playlist_id will be used.
+        
+        Returns:
+        - A list of track dictionaries with relevant details, including ID, name, artists, and URI.
+        """
+        target_playlist_id = playlist_id or self.playlist_id
+        if not target_playlist_id:
+            raise ValueError("No playlist ID provided")
 
+        tracks = []
+        offset = 0
+        limit = 100  # Spotify API limit per request
+
+        try:
+            while True:
+                response = self.sp.playlist_items(
+                    target_playlist_id,
+                    offset=offset,
+                    limit=limit,
+                    fields="items(track(id, name, artists(name), uri)), next"
+                )
+
+                # Extract track details, ensuring each track has valid data
+                for item in response['items']:
+                    track = item['track']
+                    if track and track.get('id'):
+                        track_data = {
+                            'id': track['id'],
+                            'name': track['name'],
+                            'artists': [artist['name'] for artist in track['artists']],
+                            'uri': track['uri']
+                        }
+                        tracks.append(track_data)
+                    else:
+                        logger.warning("Skipping track with missing or invalid ID")
+
+                # Check if there's a next page
+                if not response.get('next'):
+                    break
+
+                # Move to the next batch
+                offset += limit
+
+            logger.info(f"Retrieved {len(tracks)} tracks from playlist {target_playlist_id}")
+            return tracks
+
+        except Exception as e:
+            logger.error(f"Error retrieving tracks for playlist {target_playlist_id}: {str(e)}")
+            raise
     
 
     
