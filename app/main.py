@@ -9,10 +9,10 @@ from .services.spotify_service import SpotifyService, SpotifyAuthError
 from .services.rate_limiter import rate_limit
 from .manager import SpotifyPlaylistManager
 
-# Load environment variables
+
 load_dotenv()
 
-# Configure logging
+\
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -30,11 +30,11 @@ def create_app():
         PERMANENT_SESSION_LIFETIME=timedelta(days=1)
     )
     
-    # Initialize extensions
+    s
     CORS(app)
     Session(app)
     
-    # Initialize services
+  
     spotify_service = SpotifyService()
     
     @app.route('/')
@@ -62,7 +62,7 @@ def create_app():
             if not code or state != session.get('oauth_state'):
                 raise SpotifyAuthError("Invalid OAuth callback parameters")
 
-            # Get token and user info
+            
             token_info = spotify_service.get_token(code)
             user_info = spotify_service.get_current_user()
             
@@ -171,7 +171,7 @@ def create_app():
 app = create_app()
 
 if __name__ == '__main__':
-    # Check required environment variables
+   
     required_vars = ['SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET', 
                     'SPOTIFY_REDIRECT_URI', 'FLASK_SECRET_KEY']
     missing_vars = [var for var in required_vars if not os.getenv(var)]
