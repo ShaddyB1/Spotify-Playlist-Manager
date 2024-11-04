@@ -12,7 +12,7 @@ from .manager import SpotifyPlaylistManager
 
 load_dotenv()
 
-\
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 def create_app():
     app = Flask(__name__)
     
-    # App configuration
+   
     app.config.update(
         SECRET_KEY=os.getenv('FLASK_SECRET_KEY'),
         SESSION_TYPE='filesystem',
@@ -30,11 +30,11 @@ def create_app():
         PERMANENT_SESSION_LIFETIME=timedelta(days=1)
     )
     
-    s
+  
     CORS(app)
     Session(app)
     
-  
+ 
     spotify_service = SpotifyService()
     
     @app.route('/')
@@ -171,7 +171,7 @@ def create_app():
 app = create_app()
 
 if __name__ == '__main__':
-   
+  
     required_vars = ['SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET', 
                     'SPOTIFY_REDIRECT_URI', 'FLASK_SECRET_KEY']
     missing_vars = [var for var in required_vars if not os.getenv(var)]
