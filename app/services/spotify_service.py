@@ -1,126 +1,185 @@
+import os
+from spotipy import Spotify, SpotifyException
 from spotipy.oauth2 import SpotifyOAuth
-from flask import session, url_for
+from flask import session, redirect, url_for
 from functools import wraps
 import logging
-import os
-import time
-from typing import Optional, Dict, Any
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 class SpotifyAuthError(Exception):
+    """Custom exception for Spotify authentication errors."""
     pass
 
 class SpotifyService:
     def __init__(self):
+        """Initialize the Spotify service with OAuth configuration."""
+        self.client_id = os.getenv('SPOTIFY_CLIENT_ID')
+        self.client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+        self.redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI')
         self.scope = (
             "playlist-modify-public playlist-modify-private "
             "user-library-read user-read-recently-played "
             "user-read-playback-state playlist-read-private "
-            "user-top-read"
+            "playlist-read-collaborative user-top-read"
         )
-        
-        self._auth = None  # Initialize as None
-        
-    @property
-    def auth_manager(self):
-        if self._auth is None:
-            self._auth = SpotifyOAuth(
-                client_id=os.getenv('SPOTIFY_CLIENT_ID'),
-                client_secret=os.getenv('SPOTIFY_CLIENT_SECRET'),
-                redirect_uri=os.getenv('SPOTIFY_REDIRECT_URI'),
-                scope=self.scope,
-                open_browser=False,
-                cache_handler=None  # Disable caching to prevent recursion
-            )
-        return self._auth
+        self._oauth = None  # Cache the OAuth instance
 
-    def get_auth_url(self) -> str:
-        """Generate authorization URL."""
+    def create_oauth(self):
+        """Create SpotifyOAuth instance with caching."""
+        if self._oauth is not None:
+            return self._oauth
+            
+        if not all([self.client_id, self.client_secret, self.redirect_uri]):
+            raise SpotifyAuthError("Missing Spotify credentials")
+            
         try:
-            auth_url = self.auth_manager.get_authorize_url()
-            logger.info(f"Generated auth URL with state: {session.get('oauth_state')}")
+            self._oauth = SpotifyOAuth(
+                client_id=self.client_id,
+                client_secret=self.client_secret,
+                redirect_uri=self.redirect_uri,
+                scope=self.scope,
+                cache_handler=None,
+                open_browser=False,
+                show_dialog=True
+            )
+            return self._oauth
+        except Exception as e:
+            logger.error(f"Error creating OAuth: {str(e)}")
+            raise SpotifyAuthError("Failed to initialize Spotify OAuth")
+
+    def get_auth_url(self):
+        """Get the Spotify authorization URL."""
+        try:
+            oauth = self.create_oauth()
+            auth_url = oauth.get_authorize_url()
+            session['oauth_state'] = oauth.state
+            logger.info(f"Generated auth URL with state: {oauth.state}")
             return auth_url
         except Exception as e:
-            logger.error(f"Error generating auth URL: {e}")
-            raise
+            logger.error(f"Error getting auth URL: {str(e)}")
+            raise SpotifyAuthError("Failed to generate authorization URL")
 
-    def get_token(self, code: str) -> Dict[str, Any]:
-        """Get token info from authorization code."""
+    def get_token(self, code):
+        """Get access token using authorization code."""
         try:
-            token_info = self.auth_manager.get_access_token(code, as_dict=True)
+            oauth = self.create_oauth()
+            token_info = oauth.get_access_token(code, check_cache=False, as_dict=True)
+            if not token_info:
+                raise SpotifyAuthError("Failed to get token information")
+            
+            # Store minimal token info in session
+            session['token_info'] = {
+                'access_token': token_info['access_token'],
+                'refresh_token': token_info['refresh_token'],
+                'expires_at': token_info['expires_at'],
+                'scope': token_info['scope']
+            }
+            session['created_at'] = datetime.now().isoformat()
             logger.info("Successfully obtained token information")
             return token_info
         except Exception as e:
-            logger.error(f"Error getting token: {e}")
+            logger.error(f"Error getting token: {str(e)}")
             raise SpotifyAuthError(f"Failed to get access token: {str(e)}")
 
-    def refresh_token(self, token_info: dict) -> Dict[str, Any]:
-        """Refresh access token."""
+    def refresh_token(self, token_info):
+        """Refresh the access token."""
         try:
-            if self.is_token_expired(token_info):
-                token_info = self.auth_manager.refresh_access_token(token_info['refresh_token'])
-            return token_info
+            oauth = self.create_oauth()
+            if not token_info.get('refresh_token'):
+                raise SpotifyAuthError("No refresh token available")
+
+            new_token = oauth.refresh_access_token(token_info['refresh_token'])
+            
+            # Update session with new token info
+            session['token_info'] = {
+                'access_token': new_token['access_token'],
+                'refresh_token': new_token.get('refresh_token', token_info['refresh_token']),
+                'expires_at': new_token['expires_at'],
+                'scope': new_token.get('scope', token_info.get('scope', ''))
+            }
+            session['created_at'] = datetime.now().isoformat()
+            return session['token_info']
+        except SpotifyAuthError as e:
+            logger.error(f"Authentication error refreshing token: {str(e)}")
+            return None
         except Exception as e:
-            logger.error(f"Error refreshing token: {e}")
-            raise SpotifyAuthError(f"Failed to refresh token: {str(e)}")
+            logger.error(f"Unexpected error refreshing token: {str(e)}")
+            return None
+
 
     def get_spotify_client(self):
         """Get an authenticated Spotify client."""
         try:
-            from spotipy import Spotify
-            token_info = session.get('token_info', None)
-            
+            token_info = session.get('token_info')
             if not token_info:
-                raise SpotifyAuthError("No token info in session")
-                
+                return None
+
+            # Refresh token if expired and retry only once
             if self.is_token_expired(token_info):
-                token_info = self.refresh_token(token_info)
-                session['token_info'] = token_info
-                
+                refreshed_token_info = self.refresh_token(token_info)
+                if refreshed_token_info is None:
+                    logger.error("Token refresh failed, redirecting to login.")
+                    return redirect(url_for('login'))
+                token_info = refreshed_token_info
+
             return Spotify(auth=token_info['access_token'])
         except Exception as e:
-            logger.error(f"Error getting Spotify client: {e}")
-            raise SpotifyAuthError(f"Failed to get Spotify client: {str(e)}")
+            logger.error(f"Error getting Spotify client: {str(e)}")
+            return None
 
-    def is_token_expired(self, token_info: Optional[Dict]) -> bool:
+
+    def is_token_expired(self, token_info):
         """Check if the token is expired."""
-        if not token_info:
+        try:
+            now = int(datetime.now().timestamp())
+            return token_info['expires_at'] - now < 60
+        except Exception as e:
+            logger.error(f"Error checking token expiration: {str(e)}")
             return True
-        now = int(time.time())
-        return token_info['expires_at'] - now < 60
 
     def clear_auth(self):
-        """Clear authentication data."""
-        self._auth = None
-        if 'token_info' in session:
-            del session['token_info']
+        """Clear all authentication data."""
+        try:
+            session.clear()
+            self._oauth = None
+            logger.info("Successfully cleared authentication data")
+        except Exception as e:
+            logger.error(f"Error clearing auth: {str(e)}")
+            raise
 
-    def require_auth(self, f):
-        """Decorator to require authentication."""
+    @staticmethod
+    def require_auth(f):
+        """Decorator to require Spotify authentication."""
         @wraps(f)
-        def decorated(*args, **kwargs):
-            if 'token_info' not in session:
-                return url_for('login')
-                
-            token_info = session['token_info']
-            
-            try:
-                if self.is_token_expired(token_info):
-                    token_info = self.refresh_token(token_info)
-                    session['token_info'] = token_info
-            except:
-                return url_for('login')
-                
+        def decorated_function(*args, **kwargs):
+            if not session.get('token_info'):
+                return redirect(url_for('login'))
             return f(*args, **kwargs)
-        return decorated
+        return decorated_function
 
-    def get_user_playlists(self):
-        """Get user's playlists."""
+
+    def get_current_user(self):
+        """Get current user's profile information."""
         try:
             sp = self.get_spotify_client()
+            if not sp:
+                raise SpotifyAuthError("No valid Spotify client")
+            return sp.current_user()
+        except Exception as e:
+            logger.error(f"Error getting current user: {str(e)}")
+            raise
+
+    def get_user_playlists(self, limit=50):
+        """Get user's playlists with pagination."""
+        try:
+            sp = self.get_spotify_client()
+            if not sp:
+                raise SpotifyAuthError("No valid Spotify client")
+
             playlists = []
-            results = sp.current_user_playlists()
+            results = sp.current_user_playlists(limit=limit)
             
             while results:
                 playlists.extend(results['items'])
@@ -128,8 +187,8 @@ class SpotifyService:
                     results = sp.next(results)
                 else:
                     break
-                    
+
             return playlists
         except Exception as e:
-            logger.error(f"Error getting user playlists: {e}")
-            raise SpotifyAuthError(f"Failed to get playlists: {str(e)}")
+            logger.error(f"Error getting user playlists: {str(e)}")
+            raise
