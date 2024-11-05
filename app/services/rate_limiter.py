@@ -16,15 +16,15 @@ class RateLimiter:
         if key not in self.requests:
             self.requests[key] = []
         
-        # Remove old requests
+       
         self.requests[key] = [time for time in self.requests[key] 
                             if now - time < self.WINDOW_SIZE]
         
-        # Check if limit exceeded
+        
         if len(self.requests[key]) >= self.MAX_REQUESTS:
             return True
         
-        # Add new request
+       
         self.requests[key].append(now)
         return False
 
