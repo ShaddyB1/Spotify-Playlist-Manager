@@ -250,6 +250,33 @@ def optimize_playlist(playlist_id):
         logger.error(f"Optimization error: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/playlist/<playlist_id>/similar/add', methods=['POST'])  
+@spotify_service.require_auth
+@rate_limit
+def add_similar_tracks(playlist_id):
+    try:
+        track_ids = request.json.get('track_ids', [])
+        if not track_ids:
+            return jsonify({'error': 'No tracks specified'}), 400
+
+        manager = SpotifyPlaylistManager(playlist_id)
+        
+       
+        if not manager.verify_playlist():
+            return jsonify({'error': 'Playlist not found or not accessible'}), 404
+
+     
+        manager.add_similar_tracks(track_ids)
+        
+        return jsonify({
+            'message': f'Successfully added {len(track_ids)} tracks',
+            'added_tracks': len(track_ids)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error adding similar tracks: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/logout', methods=['POST'])
 def logout():
     try:
@@ -273,17 +300,17 @@ def get_similar_tracks(playlist_id):
     try:
         logger.info(f"Starting similar tracks request for playlist: {playlist_id}")
         
-        # Initialize manager
+       
         manager = SpotifyPlaylistManager(playlist_id)
         
-        # Verify playlist exists and is accessible
+        
         if not manager.verify_playlist():
             logger.error(f"Playlist {playlist_id} not found or not accessible")
             return jsonify({
                 'error': 'Playlist not found or not accessible'
             }), 404
         
-        # Get similar tracks
+       
         similar_tracks = manager.get_similar_tracks(limit=20)
         
         if not similar_tracks:
