@@ -9,6 +9,8 @@ from app.services.spotify_service import SpotifyService, SpotifyAuthError
 from app.services.rate_limiter import rate_limit
 from app.manager import SpotifyPlaylistManager
 from app.manager import SpotifyPlaylistManager, PlaylistAnalysisError
+from flask import Flask, jsonify, request
+from celery import Celery
 
 
 load_dotenv()
