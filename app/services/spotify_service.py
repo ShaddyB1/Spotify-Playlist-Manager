@@ -89,7 +89,8 @@ class SpotifyService:
             oauth = self.create_oauth()
             if not token_info.get('refresh_token'):
                 raise SpotifyAuthError("No refresh token available")
-
+    
+            logger.info("Attempting to refresh token.")
             new_token = oauth.refresh_access_token(token_info['refresh_token'])
             
             # Update session with new token info
@@ -100,6 +101,7 @@ class SpotifyService:
                 'scope': new_token.get('scope', token_info.get('scope', ''))
             }
             session['created_at'] = datetime.now().isoformat()
+            logger.info("Token refreshed successfully.")
             return session['token_info']
         except SpotifyAuthError as e:
             logger.error(f"Authentication error refreshing token: {str(e)}")
@@ -109,25 +111,39 @@ class SpotifyService:
             return None
 
 
+
     def get_spotify_client(self):
         """Get an authenticated Spotify client."""
         try:
             token_info = session.get('token_info')
             if not token_info:
+                logger.warning("No token info found in session")
                 return None
-
-            # Refresh token if expired and retry only once
+    
+            # Check if token is expired and refresh if needed
             if self.is_token_expired(token_info):
-                refreshed_token_info = self.refresh_token(token_info)
-                if refreshed_token_info is None:
-                    logger.error("Token refresh failed, redirecting to login.")
+                # Use a counter to limit the number of refresh attempts
+                session['refresh_attempts'] = session.get('refresh_attempts', 0) + 1
+                if session['refresh_attempts'] > 1:  # Only allow 1 refresh attempt
+                    logger.error("Max refresh attempts reached. Redirecting to login.")
+                    session.pop('refresh_attempts', None)
+                    self.clear_auth()
                     return redirect(url_for('login'))
-                token_info = refreshed_token_info
-
+                
+                # Try refreshing the token
+                token_info = self.refresh_token(token_info)
+                if not token_info:
+                    logger.error("Token refresh failed, redirecting to login.")
+                    self.clear_auth()
+                    return redirect(url_for('login'))
+    
+            # Reset refresh attempts counter on successful access
+            session.pop('refresh_attempts', None)
             return Spotify(auth=token_info['access_token'])
         except Exception as e:
             logger.error(f"Error getting Spotify client: {str(e)}")
             return None
+
 
 
     def is_token_expired(self, token_info):
