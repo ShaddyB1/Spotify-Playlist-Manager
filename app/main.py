@@ -10,7 +10,7 @@ from app.services.rate_limiter import rate_limit
 from app.manager import SpotifyPlaylistManager
 from app.manager import SpotifyPlaylistManager, PlaylistAnalysisError
 from flask import Flask, jsonify, request
-from celery import Celery
+
 
 
 load_dotenv()
@@ -21,7 +21,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-celery = Celery('tasks', broker='redis://localhost:6379/0')
+
 
 app = Flask(__name__)
 
