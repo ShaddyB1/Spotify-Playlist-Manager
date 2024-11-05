@@ -83,6 +83,39 @@ def check_session():
             session.clear()
             return redirect(url_for('index'))
 
+@app.route('/api/optimize/<playlist_id>', methods=['POST'])
+@spotify_service.require_auth
+@rate_limit
+def optimize_playlist(playlist_id):
+    try:
+        criteria = request.json
+        if not criteria:
+            return jsonify({'error': 'No optimization criteria provided'}), 400
+            
+        # Validate criteria
+        try:
+            criteria['minPopularity'] = int(criteria.get('minPopularity', 30))
+            criteria['minEnergy'] = float(criteria.get('minEnergy', 0.2))
+            criteria['autoRemove'] = bool(criteria.get('autoRemove', False))
+        except (ValueError, TypeError) as e:
+            return jsonify({'error': f'Invalid criteria format: {str(e)}'}), 400
+            
+        manager = SpotifyPlaylistManager(playlist_id)
+        
+        # Verify playlist exists
+        if not manager.verify_playlist():
+            return jsonify({'error': 'Playlist not found or not accessible'}), 404
+            
+        result = manager.optimize_playlist(criteria)
+        return jsonify(result)
+        
+    except PlaylistAnalysisError as e:
+        logger.error(f"Optimization error: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f"Unexpected error during optimization: {str(e)}", exc_info=True)
+        return jsonify({'error': 'An unexpected error occurred during optimization'}), 500
+
 @app.route('/')
 def index():
     if session.get('token_info'):
@@ -250,6 +283,25 @@ def add_similar_tracks(playlist_id):
     except Exception as e:
         logger.error(f"Add similar tracks error: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def catch_all(path):
+    if not path:  # If root path
+        if session.get('token_info'):
+            return redirect(url_for('dashboard'))
+        return render_template('index.html')
+    elif path == 'dashboard':
+        return redirect(url_for('dashboard'))
+    elif path == 'login':
+        return redirect(url_for('login'))
+    elif path == 'callback':
+        return redirect(url_for('callback'))
+    # For any other path, redirect to index
+    return redirect(url_for('index'))
+
+
         
 @app.route('/api/analyze-optimization/<playlist_id>', methods=['POST'])
 @spotify_service.require_auth
@@ -309,45 +361,7 @@ def analyze_optimization(playlist_id):
 
 
 
-@app.route('/api/optimize/<playlist_id>', methods=['POST'])
-@spotify_service.require_auth
-@rate_limit
-def optimize_playlist(playlist_id):
-    try:
-        criteria = request.json
-        if not criteria:
-            return jsonify({'error': 'No optimization criteria provided'}), 400
-            
-        # Start a background task
-        task = optimize_playlist_task.delay(playlist_id, criteria)
-        
-        # Return task ID immediately
-        return jsonify({
-            'task_id': task.id,
-            'status': 'processing',
-            'message': 'Optimization started'
-        })
-        
-    except Exception as e:
-        logger.error(f"Unexpected optimization error: {str(e)}", exc_info=True)
-        return jsonify({'error': 'An unexpected error occurred during optimization'}), 500
 
-# Celery task
-@celery.task
-def optimize_playlist_task(playlist_id, criteria):
-    try:
-        manager = SpotifyPlaylistManager(playlist_id)
-        validated_criteria = {
-            'minPopularity': int(criteria.get('minPopularity', 30)),
-            'minEnergy': float(criteria.get('minEnergy', 0.2)),
-            'autoRemove': bool(criteria.get('autoRemove', False))
-        }
-        
-        result = manager.optimize_playlist(validated_criteria)
-        return result
-    except Exception as e:
-        logger.error(f"Task error: {str(e)}")
-        return {'error': str(e)}
 
 # Add a status endpoint
 @app.route('/api/optimize/status/<task_id>')
