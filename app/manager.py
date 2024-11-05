@@ -35,6 +35,7 @@ class SpotifyPlaylistManager:
             "user-read-playback-state playlist-read-private "
             "user-top-read"
         )
+        self.rate_limit_delay = 1
         
         try:
             auth_manager = SpotifyOAuth(
@@ -111,54 +112,28 @@ class SpotifyPlaylistManager:
             raise PlaylistAnalysisError(f"Failed to get playlist tracks: {str(e)}")
 
     def get_audio_features_batch(self, track_ids: List[str]) -> Dict[str, float]:
-        """Get audio features for multiple tracks in one request with improved rate limiting."""
+        """Get audio features for multiple tracks in one request."""
         try:
             features_dict = {}
             batch_size = 25  
             
-            
-            valid_track_ids = [tid for tid in track_ids if tid]
-            
-            for i in range(0, len(valid_track_ids), batch_size):
-                retries = 3
-                batch = valid_track_ids[i:i+batch_size]
+            for i in range(0, len(track_ids), batch_size):
+                batch = track_ids[i:i+batch_size]
                 
-                while retries > 0:
-                    try:
-                        
-                        time.sleep(self.rate_limit_delay)
-                        
-                        features = self._make_spotify_request(
-                            self.sp.audio_features,
-                            batch
-                        )
-                        
-                        if features:
-                            for track_id, feature in zip(batch, features):
-                                if feature:
-                                    features_dict[track_id] = feature.get('energy', 0.0)
-                                else:
-                                    features_dict[track_id] = 0.0
-                                    
-                        
-                        self.rate_limit_delay = 1
-                        break  
-                        
-                    except Exception as e:
-                        if 'status: 429' in str(e):
-                            
-                            retry_after = int(e.headers.get('Retry-After', 3)) if hasattr(e, 'headers') else 3
-                            logger.warning(f"Rate limit hit, waiting {retry_after} seconds")
-                            time.sleep(retry_after)
-                            self.rate_limit_delay *= 2  
-                            retries -= 1
-                        else:
-                            logger.error(f"Error processing batch: {str(e)}")
-                            break
-                
-                
-                if retries == 0:
-                    logger.warning(f"Failed to get features for batch after all retries")
+                try:
+                   
+                    time.sleep(1)
+                    
+                    features = self.sp.audio_features(batch)
+                    if features:
+                        for track_id, feature in zip(batch, features):
+                            if feature:
+                                features_dict[track_id] = feature.get('energy', 0.0)
+                            else:
+                                features_dict[track_id] = 0.0
+                                
+                except Exception as e:
+                    logger.error(f"Error processing batch: {str(e)}")
                     for track_id in batch:
                         features_dict[track_id] = 0.0
                         
