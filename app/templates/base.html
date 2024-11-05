@@ -11,23 +11,79 @@
     <meta http-equiv="Expires" content="0">
     <title>Spotify Playlist Manager</title>
     
-    <!-- Stylesheets -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Your existing tailwind config -->
-
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'spotify-green': '#1DB954',
+                        'spotify-black': '#191414',
+                        'spotify-gray': '#282828'
+                    }
+                }
+            }
+        }
+    </script>
+    
     <style>
-        /* Your existing styles */
+        .theme-transition {
+            transition: background-color 0.3s, color 0.3s;
+        }
 
-        /* Additional Mobile Fixes */
+        html:not(.dark) {
+            background-color: white;
+            color: #1a1a1a;
+        }
+        html:not(.dark) .bg-spotify-gray {
+            background-color: #f3f4f6;
+        }
+        html:not(.dark) .text-gray-400 {
+            color: #6b7280;
+        }
+
+        .skeleton-loading {
+            background: linear-gradient(90deg, #2c2c2c 25%, #3d3d3d 50%, #2c2c2c 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
         @media (max-width: 640px) {
             .container {
                 width: 100%;
                 padding-left: 1rem;
                 padding-right: 1rem;
                 margin: 0;
+            }
+            
+            .nav-items {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            
+            .text-3xl {
+                font-size: 1.5rem;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr !important;
+            }
+            
+            .mobile-full {
+                width: 100%;
+                margin: 0.5rem 0;
             }
             
             .modal-content {
@@ -49,6 +105,7 @@
                 background-color: #1DB954;
                 padding: 1rem;
                 box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                transition: all 0.3s ease-in-out;
             }
 
             .mobile-nav-item {
@@ -63,7 +120,39 @@
             }
         }
 
-        /* Safe Area Insets for Mobile */
+        .toast-message {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 50;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid #fff;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         @supports (padding: max(0px)) {
             .safe-padding {
                 padding-left: max(1rem, env(safe-area-inset-left));
@@ -72,112 +161,223 @@
             }
         }
 
-        /* Fix for iOS 100vh issue */
         .min-h-screen {
             min-height: -webkit-fill-available;
         }
     </style>
+    {% block head %}{% endblock %}
 </head>
 <body class="theme-transition min-h-screen bg-white dark:bg-spotify-black text-gray-900 dark:text-white">
-    <!-- Your existing navigation bar code -->
-
-    <!-- Modified Mobile Menu -->
-    <div id="mobileMenu" class="hidden md:flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6 w-full md:w-auto">
-        {% if session.get('token_info') %}
-            <a href="{{ url_for('dashboard') }}" 
-               class="mobile-nav-item text-white hover:text-gray-200 transition-colors">
-                My Playlists
-            </a>
-            
-            <!-- Theme Toggle -->
-            <button id="themeToggle" 
-                    class="mobile-nav-item p-2 rounded-full hover:bg-white hover:bg-opacity-20 transition-colors focus:outline-none">
-                <!-- Your existing theme toggle icons -->
-            </button>
-
-            <!-- User Profile -->
-            <div class="mobile-nav-item flex items-center justify-center space-x-3">
-                {% if session.get('user_info') %}
-                    {% if session.user_info.image %}
-                        <img src="{{ session.user_info.image }}" 
-                             alt="Profile" 
-                             class="w-8 h-8 rounded-full">
-                    {% endif %}
-                    <span class="text-white">{{ session.user_info.name }}</span>
-                {% endif %}
+    <nav class="bg-spotify-green p-4 sticky top-0 z-50 shadow-lg safe-padding">
+    <div class="container mx-auto">
+        <div class="flex flex-col md:flex-row justify-between items-center">
+            <div class="flex items-center w-full md:w-auto justify-between mb-4 md:mb-0">
+                <h1 class="text-xl md:text-2xl font-bold text-white">
+                    <a href="{{ url_for('index') }}" class="hover:text-gray-200 transition-colors">
+                        Spotify Playlist Manager
+                    </a>
+                </h1>
+                <button id="mobileMenuBtn" 
+                        class="md:hidden text-white focus:outline-none p-2 hover:bg-white hover:bg-opacity-20 rounded-lg transition-colors"
+                        aria-label="Toggle menu">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"/>
+                    </svg>
+                </button>
             </div>
 
-            <!-- Logout Button -->
-            <form id="logoutForm" action="{{ url_for('logout') }}" method="POST" class="w-full md:w-auto">
-                <button type="button" 
-                        onclick="handleLogout()"
-                        class="mobile-nav-item bg-black text-white px-6 py-2 rounded-full hover:bg-opacity-80 transition-colors w-full">
-                    Logout
-                </button>
-            </form>
-        {% endif %}
+            <div id="mobileMenu" class="hidden md:flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6 w-full md:w-auto">
+                {% if session.get('token_info') %}
+                    <a href="{{ url_for('dashboard') }}" 
+                       class="mobile-nav-item text-white hover:text-gray-200 transition-colors">
+                        My Playlists
+                    </a>
+                    
+                    <button id="themeToggle" 
+                            class="mobile-nav-item p-2 rounded-full hover:bg-white hover:bg-opacity-20 transition-colors focus:outline-none">
+                        <svg id="darkIcon" class="w-6 h-6 text-white hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                        </svg>
+                        <svg id="lightIcon" class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"/>
+                        </svg>
+                    </button>
+
+                    <div class="mobile-nav-item flex items-center justify-center space-x-3">
+                        {% if session.get('user_info') %}
+                            {% if session.user_info.image %}
+                                <img src="{{ session.user_info.image }}" 
+                                     alt="Profile" 
+                                     class="w-8 h-8 rounded-full">
+                            {% endif %}
+                            <span class="text-white">{{ session.user_info.name }}</span>
+                        {% endif %}
+                    </div>
+
+                    <form id="logoutForm" action="{{ url_for('logout') }}" method="POST" class="w-full md:w-auto">
+                        <button type="button" 
+                                onclick="handleLogout()"
+                                class="mobile-nav-item bg-black text-white px-6 py-2 rounded-full hover:bg-opacity-80 transition-colors w-full">
+                            Logout
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
     </div>
+</nav>
 
-    <!-- Your existing content -->
+<div class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50" id="loadingOverlay">
+    <div class="bg-spotify-gray p-6 rounded-lg flex items-center space-x-4">
+        <div class="spinner"></div>
+        <span class="text-white">Loading...</span>
+    </div>
+</div>
 
-    <!-- Modified Scripts -->
-    <script>
-        // Your existing scripts
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <div class="fixed top-20 right-4 z-50 space-y-2">
+            {% for category, message in messages %}
+                <div class="flash-message bg-{{ category if category != 'message' else 'green-500' }} text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endwith %}
 
-        // Additional Mobile Handling
-        document.addEventListener('DOMContentLoaded', function() {
-            // Handle iOS viewport height
+<main class="container mx-auto px-4 py-8 safe-padding">
+    {% block content %}{% endblock %}
+</main>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const html = document.documentElement;
+        const themeToggle = document.getElementById('themeToggle');
+        const darkIcon = document.getElementById('darkIcon');
+        const lightIcon = document.getElementById('lightIcon');
+        const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+        const mobileMenu = document.getElementById('mobileMenu');
+
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+
+        window.addEventListener('resize', () => {
             const vh = window.innerHeight * 0.01;
             document.documentElement.style.setProperty('--vh', `${vh}px`);
-
-            window.addEventListener('resize', () => {
-                const vh = window.innerHeight * 0.01;
-                document.documentElement.style.setProperty('--vh', `${vh}px`);
-            });
-
-            // Improve mobile menu handling
-            let touchStartY = 0;
-            const mobileMenu = document.getElementById('mobileMenu');
-
-            document.addEventListener('touchstart', (e) => {
-                touchStartY = e.touches[0].clientY;
-            }, { passive: true });
-
-            document.addEventListener('touchmove', (e) => {
-                if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
-                    const touchY = e.touches[0].clientY;
-                    const diff = touchStartY - touchY;
-
-                    if (diff > 50) { // Swipe up
-                        mobileMenu.classList.add('hidden');
-                    }
-                }
-            }, { passive: true });
+            
+            if (window.innerWidth > 768) {
+                mobileMenu?.classList.remove('hidden');
+            } else {
+                mobileMenu?.classList.add('hidden');
+            }
         });
 
-        // Improved session handling
-        function checkSession() {
-            const lastActivity = sessionStorage.getItem('lastActivity');
-            const now = new Date().getTime();
-            
-            if (lastActivity && (now - lastActivity) > 3600000) { // 1 hour
-                handleLogout();
-                return false;
-            }
-            
-            sessionStorage.setItem('lastActivity', now);
-            return true;
+        function updateTheme(isDark) {
+            html.classList.toggle('dark', isDark);
+            darkIcon.classList.toggle('hidden', isDark);
+            lightIcon.classList.toggle('hidden', !isDark);
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
         }
 
-        // Update activity timestamp on user interaction
-        document.addEventListener('click', () => {
-            sessionStorage.setItem('lastActivity', new Date().getTime());
+        const savedTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        updateTheme(savedTheme ? savedTheme === 'dark' : prefersDark);
+
+        themeToggle?.addEventListener('click', () => {
+            const isDark = !html.classList.contains('dark');
+            updateTheme(isDark);
         });
 
-        // Check session every minute
-        setInterval(checkSession, 60000);
-    </script>
+        mobileMenuBtn?.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+        });
 
-    {% block scripts %}{% endblock %}
+        document.addEventListener('click', (event) => {
+            if (!mobileMenuBtn?.contains(event.target) && 
+                !mobileMenu?.contains(event.target)) {
+                mobileMenu?.classList.add('hidden');
+            }
+        });
+
+        let touchStartY = 0;
+        document.addEventListener('touchstart', (e) => {
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        document.addEventListener('touchmove', (e) => {
+            if (mobileMenu && !mobileMenu.classList.contains('hidden')) {
+                const touchY = e.touches[0].clientY;
+                const diff = touchStartY - touchY;
+
+                if (diff > 50) {
+                    mobileMenu.classList.add('hidden');
+                }
+            }
+        }, { passive: true });
+
+        const messages = document.querySelectorAll('.flash-message');
+        messages.forEach(message => {
+            setTimeout(() => {
+                message.style.transform = 'translateX(100%)';
+                setTimeout(() => message.remove(), 300);
+            }, 5000);
+        });
+    });
+
+    function handleLogout() {
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        document.cookie.split(";").forEach(cookie => {
+            const name = cookie.split("=")[0].trim();
+            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+        });
+        
+        document.getElementById('logoutForm')?.submit();
+    }
+
+    window.showLoading = function() {
+        document.getElementById('loadingOverlay').classList.remove('hidden');
+        document.getElementById('loadingOverlay').classList.add('flex');
+    }
+
+    window.hideLoading = function() {
+        document.getElementById('loadingOverlay').classList.add('hidden');
+        document.getElementById('loadingOverlay').classList.remove('flex');
+    }
+
+    function checkSession() {
+        const lastActivity = sessionStorage.getItem('lastActivity');
+        const now = new Date().getTime();
+        
+        if (lastActivity && (now - lastActivity) > 3600000) {
+            handleLogout();
+            return false;
+        }
+        
+        sessionStorage.setItem('lastActivity', now);
+        return true;
+    }
+
+    document.addEventListener('click', () => {
+        sessionStorage.setItem('lastActivity', new Date().getTime());
+    });
+
+    setInterval(checkSession, 60000);
+
+    window.handleError = function(error) {
+        const toast = document.createElement('div');
+        toast.className = 'toast-message bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg';
+        toast.textContent = error.message || 'An error occurred';
+        document.body.appendChild(toast);
+
+        setTimeout(() => {
+            toast.style.transform = 'translateX(100%)';
+            setTimeout(() => toast.remove(), 300);
+        }, 5000);
+    }
+</script>
+
+{% block scripts %}{% endblock %}
 </body>
 </html>
