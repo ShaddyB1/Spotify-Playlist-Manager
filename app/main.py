@@ -10,39 +10,39 @@ from app.services.rate_limiter import rate_limit
 from app.manager import SpotifyPlaylistManager
 from app.manager import SpotifyPlaylistManager, PlaylistAnalysisError
 
-# Load environment variables
+
 load_dotenv()
 
-# Configure logging
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# Create the Flask app first
+
 app = Flask(__name__)
 
-# Configure app with all settings at once (don't split the configuration)
+
 app.config.update(
     SECRET_KEY=os.getenv('FLASK_SECRET_KEY'),
     SESSION_TYPE='filesystem',
-    SESSION_PERMANENT=False,  # Sessions expire when browser closes
-    PERMANENT_SESSION_LIFETIME=timedelta(hours=1),  # Max session time
+    SESSION_PERMANENT=False,  
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=1),  
     SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
-    SESSION_COOKIE_NAME='spotify_session'  # Unique session name
+    SESSION_COOKIE_NAME='spotify_session'  
 )
 
-# Initialize extensions
+
 CORS(app)
 Session(app)
 
-# Initialize services
+
 spotify_service = SpotifyService()
 
-# Add cache control
+
 @app.after_request
 def add_header(response):
     """Add headers to prevent caching."""
@@ -175,7 +175,7 @@ def analyze_playlist(playlist_id):
         logger.info(f"Starting analysis for playlist: {playlist_id}")
         manager = SpotifyPlaylistManager(playlist_id)
         
-        # Verify playlist exists
+       
         if not manager.verify_playlist():
             logger.error(f"Playlist {playlist_id} not found or not accessible")
             flash('Playlist not found or not accessible', 'error')
@@ -250,11 +250,11 @@ def analyze_optimization(playlist_id):
         for track in analysis['track_details']:
             reasons = []
             
-            # Check popularity
+           
             if track['popularity'] < min_popularity:
                 reasons.append(f"Low popularity ({track['popularity']}%)")
             
-            # Check energy
+         
             if track['energy'] < min_energy:
                 reasons.append(f"Low energy ({track['energy']*100:.0f}%)")
             
@@ -346,12 +346,11 @@ def not_found_error(error):
 def internal_error(error):
     return render_template('error.html', error="An internal error occurred"), 500
 
-# This is what Gunicorn uses
 def create_app():
     return app
 
 if __name__ == '__main__':
-    # Check required environment variables
+   
     required_vars = ['SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET', 
                     'SPOTIFY_REDIRECT_URI', 'FLASK_SECRET_KEY']
     missing_vars = [var for var in required_vars if not os.getenv(var)]
