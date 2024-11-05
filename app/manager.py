@@ -21,28 +21,35 @@ class PlaylistAnalysisError(Exception):
 
 class SpotifyPlaylistManager:
     def __init__(self, playlist_id: str):
-        """Initialize the Spotify client with comprehensive scope."""
-        load_dotenv()
-        
-        self.scope = (
-            "playlist-modify-public playlist-modify-private "
-            "user-library-read user-read-recently-played "
-            "user-read-playback-state playlist-read-private "
-            "user-top-read"
+    """Initialize the Spotify client with comprehensive scope."""
+    load_dotenv()
+    
+    self.scope = (
+        "playlist-modify-public playlist-modify-private "
+        "user-library-read user-read-recently-played "
+        "user-read-playback-state playlist-read-private "
+        "user-top-read"
+    )
+    
+    try:
+        auth_manager = SpotifyOAuth(
+            client_id=os.getenv('SPOTIFY_CLIENT_ID'),
+            client_secret=os.getenv('SPOTIFY_CLIENT_SECRET'),
+            redirect_uri=os.getenv('SPOTIFY_REDIRECT_URI'),
+            scope=self.scope
         )
         
-        try:
-            self.sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
-                client_id=os.getenv('SPOTIFY_CLIENT_ID'),
-                client_secret=os.getenv('SPOTIFY_CLIENT_SECRET'),
-                redirect_uri=os.getenv('SPOTIFY_REDIRECT_URI'),
-                scope=self.scope
-            ))
-            self.playlist_id = playlist_id
-            logger.info(f"Successfully initialized SpotifyPlaylistManager for playlist: {playlist_id}")
-        except Exception as e:
-            logger.error(f"Failed to initialize Spotify client: {str(e)}")
-            raise
+        self.sp = spotipy.Spotify(
+            auth_manager=auth_manager,
+            requests_timeout=10,
+            retries=3,
+            backoff_factor=2
+        )
+        self.playlist_id = playlist_id
+        logger.info(f"Successfully initialized SpotifyPlaylistManager for playlist: {playlist_id}")
+    except Exception as e:
+        logger.error(f"Failed to initialize Spotify client: {str(e)}")
+        raise
 
 
     def get_playlist_tracks(self) -> List[Dict]:
