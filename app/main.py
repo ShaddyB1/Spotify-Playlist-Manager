@@ -83,12 +83,12 @@ def check_session():
 
 @app.route('/')
 def index():
-    if 'token_info' not in session:
-        # Check if mobile
-        if request.headers.get('User-Agent', '').lower().find('mobile') > -1:
-            return render_template('mobile_index.html')
-        return render_template('index.html')
-    return redirect(url_for('dashboard'))
+    if session.get('token_info'):
+        return redirect(url_for('dashboard'))
+    # Check if mobile and not logged in
+    if request.headers.get('User-Agent', '').lower().find('mobile') > -1:
+        session['mobile'] = True
+    return render_template('index.html')
     
 @app.route('/login')
 def login():
@@ -99,6 +99,12 @@ def login():
         logger.error(f"Login error: {str(e)}")
         flash('Failed to initialize login', 'error')
         return render_template('error.html', error="Authentication failed"), 500
+
+@app.route('/mobile')
+def mobile_redirect():
+    if session.get('token_info'):
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('index'))
 
 @app.route('/callback')
 def callback():
@@ -160,6 +166,10 @@ def callback():
 @app.errorhandler(404)
 def not_found_error(error):
     if request.headers.get('User-Agent', '').lower().find('mobile') > -1:
+        # If it's a mobile device and we have a session, go to dashboard
+        if 'token_info' in session:
+            return redirect(url_for('dashboard'))
+        # If no session, go to index/login page
         return redirect(url_for('index'))
     return render_template('error.html', error="Page not found"), 404
         
