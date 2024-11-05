@@ -136,14 +136,14 @@
             {% endfor %}
         </div>
 
-        <!-- How It Works Section -->
+        
         <div class="mt-24" data-aos="fade-up">
             <h2 class="text-3xl font-bold text-gray-900 dark:text-white text-center mb-12">How It Works</h2>
             <div class="relative">
-                <!-- Timeline Line -->
+              
                 <div class="absolute left-1/2 transform -translate-x-1/2 h-full w-1 bg-green-500 opacity-20"></div>
                 
-                <!-- Timeline Items -->
+              
                 <div class="space-y-12">
                     {% for step in [
                         {
@@ -177,7 +177,7 @@
                                 <span class="text-white font-bold">{{ loop.index }}</span>
                             </div>
                             <div class="flex-1 pl-8">
-                                <!-- Placeholder for visual balance -->
+                               
                                 <div class="h-full"></div>
                             </div>
                         </div>
@@ -187,7 +187,7 @@
             </div>
         </div>
 
-        <!-- Stats Section -->
+       
         <div class="mt-24" data-aos="fade-up">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {% for stat in [
@@ -208,7 +208,7 @@
             </div>
         </div>
 
-        <!-- FAQ Section -->
+      
         <div class="mt-24" data-aos="fade-up">
             <h2 class="text-3xl font-bold text-gray-900 dark:text-white text-center mb-12">Frequently Asked Questions</h2>
             <div class="max-w-3xl mx-auto space-y-4">
@@ -309,7 +309,7 @@
     background: #1ed760;
 }
 
-/* Loading Button State */
+
 .login-button.loading {
     position: relative;
     pointer-events: none;
@@ -323,12 +323,12 @@
     display: block;
 }
 
-/* Feature Card Hover Styles */
+
 .feature-card:hover .feature-list {
     max-height: 200px;
 }
 
-/* FAQ Hover Effects */
+
 .faq-item:hover {
     transform: translateX(4px);
 }
@@ -371,7 +371,7 @@ document.addEventListener('DOMContentLoaded', function() {
         localStorage.setItem('theme', isDark ? 'dark' : 'light');
     }
 
-    // Check saved theme or system preference
+    
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme) {
         updateTheme(savedTheme === 'dark');
@@ -385,23 +385,23 @@ document.addEventListener('DOMContentLoaded', function() {
         updateTheme(isDark);
     });
 
-    // FAQ Accordion
+  
     document.querySelectorAll('.faq-item').forEach(item => {
         item.addEventListener('click', function() {
             const answer = this.querySelector('.faq-answer');
             const icon = this.querySelector('.faq-icon');
             
-            // Toggle answer
+           
             answer.classList.toggle('hidden');
             
-            // Update aria-expanded
+          
             this.setAttribute('aria-expanded', answer.classList.contains('hidden') ? 'false' : 'true');
             
             // Rotate icon
             icon.style.transform = answer.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
         });
 
-        // Keyboard accessibility
+        
         item.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
@@ -410,7 +410,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Feature card interactions
+    
     document.querySelectorAll('.feature-card').forEach(card => {
         card.addEventListener('mouseenter', function() {
             this.querySelector('.feature-icon').style.transform = 'scale(1.1) rotate(5deg)';
@@ -427,7 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
         this.disabled = true;
     });
 
-    // Parallax effect
+    
     window.addEventListener('scroll', function() {
         requestAnimationFrame(() => {
             document.querySelectorAll('.parallax').forEach(element => {
