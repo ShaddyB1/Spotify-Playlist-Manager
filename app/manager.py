@@ -67,23 +67,39 @@ class SpotifyPlaylistManager:
     def get_audio_features_batch(self, track_ids: List[str]) -> Dict[str, float]:
         """Get audio features for multiple tracks in one request."""
         try:
-         
             features_dict = {}
-            for i in range(0, len(track_ids), 100):
-                batch = track_ids[i:i+100]
+            batch_size = 50  # Reduce batch size from 100 to 50
+            
+            for i in range(0, len(track_ids), batch_size):
+                retries = 3
+                batch = track_ids[i:i+batch_size]
                 
-              
-                time.sleep(1)  
-                
-                features = self.sp.audio_features(batch)
-                
-                
-                for track_id, feature in zip(batch, features):
-                    if feature:
-                        features_dict[track_id] = feature.get('energy', 0.0)
-                    else:
-                        features_dict[track_id] = 0.0
+                while retries > 0:
+                    try:
+                        # Add longer delay between batches
+                        time.sleep(2)  # Increased from 1 to 2 seconds
                         
+                        features = self.sp.audio_features(batch)
+                        
+                        # Process the batch results
+                        for track_id, feature in zip(batch, features):
+                            if feature:
+                                features_dict[track_id] = feature.get('energy', 0.0)
+                            else:
+                                features_dict[track_id] = 0.0
+                                
+                        break  # Success, exit retry loop
+                        
+                    except Exception as e:
+                        if 'status: 429' in str(e):
+                            # Get retry-after header if available
+                            retry_after = int(e.headers.get('Retry-After', 3)) if hasattr(e, 'headers') else 3
+                            time.sleep(retry_after)
+                            retries -= 1
+                        else:
+                            logger.error(f"Error processing batch: {str(e)}")
+                            break
+                            
             return features_dict
         except Exception as e:
             logger.error(f"Error getting audio features for batch: {str(e)}")
