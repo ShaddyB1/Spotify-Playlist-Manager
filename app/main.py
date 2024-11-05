@@ -8,13 +8,8 @@ from dotenv import load_dotenv
 from app.services.spotify_service import SpotifyService, SpotifyAuthError
 from app.services.rate_limiter import rate_limit
 from app.manager import SpotifyPlaylistManager
-from app.manager import SpotifyPlaylistManager, PlaylistAnalysisError
-from flask import Flask, jsonify, request
-
-
 
 load_dotenv()
-
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -22,32 +17,26 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 app = Flask(__name__)
-
 
 app.config.update(
     SECRET_KEY=os.getenv('FLASK_SECRET_KEY'),
     SESSION_TYPE='filesystem',
-    SESSION_PERMANENT=False,  
-    PERMANENT_SESSION_LIFETIME=timedelta(hours=1),  
+    SESSION_PERMANENT=False,
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=1),
     SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
-    SESSION_COOKIE_NAME='spotify_session'  
+    SESSION_COOKIE_NAME='spotify_session'
 )
-
 
 CORS(app)
 Session(app)
 
-
 spotify_service = SpotifyService()
-
 
 @app.after_request
 def add_header(response):
-    """Add headers to prevent caching."""
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
@@ -55,25 +44,23 @@ def add_header(response):
 
 @app.before_request
 def check_session():
-    """Check session validity before each request."""
+    if request.path == '/':
+        return None
+        
     if 'token_info' in session:
         try:
-            # Check if session is expired
             created_at = session.get('created_at')
             if created_at:
                 created_at = datetime.fromisoformat(created_at)
                 if datetime.now() - created_at > timedelta(hours=1):
-                    logger.info("Session expired, clearing session")
                     session.clear()
                     return redirect(url_for('index'))
                     
-            # Check if token needs refresh
             if spotify_service.is_token_expired(session['token_info']):
                 try:
                     new_token = spotify_service.refresh_token(session['token_info'])
                     session['token_info'] = new_token
                     session['created_at'] = datetime.now().isoformat()
-                    logger.info("Token refreshed successfully")
                 except Exception as e:
                     logger.error(f"Token refresh failed: {str(e)}")
                     session.clear()
@@ -83,48 +70,23 @@ def check_session():
             session.clear()
             return redirect(url_for('index'))
 
-@app.route('/api/optimize/<playlist_id>', methods=['POST'])
-@spotify_service.require_auth
-@rate_limit
-def optimize_playlist(playlist_id):
-    try:
-        criteria = request.json
-        if not criteria:
-            return jsonify({'error': 'No optimization criteria provided'}), 400
-            
-        # Validate criteria
-        try:
-            criteria['minPopularity'] = int(criteria.get('minPopularity', 30))
-            criteria['minEnergy'] = float(criteria.get('minEnergy', 0.2))
-            criteria['autoRemove'] = bool(criteria.get('autoRemove', False))
-        except (ValueError, TypeError) as e:
-            return jsonify({'error': f'Invalid criteria format: {str(e)}'}), 400
-            
-        manager = SpotifyPlaylistManager(playlist_id)
-        
-        # Verify playlist exists
-        if not manager.verify_playlist():
-            return jsonify({'error': 'Playlist not found or not accessible'}), 404
-            
-        result = manager.optimize_playlist(criteria)
-        return jsonify(result)
-        
-    except PlaylistAnalysisError as e:
-        logger.error(f"Optimization error: {str(e)}", exc_info=True)
-        return jsonify({'error': str(e)}), 400
-    except Exception as e:
-        logger.error(f"Unexpected error during optimization: {str(e)}", exc_info=True)
-        return jsonify({'error': 'An unexpected error occurred during optimization'}), 500
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def catch_all(path):
+    if not path:
+        if session.get('token_info'):
+            return redirect(url_for('dashboard'))
+        return render_template('index.html')
+    elif path in ['dashboard', 'login', 'callback']:
+        return redirect(url_for(path))
+    return redirect(url_for('index'))
 
 @app.route('/')
 def index():
     if session.get('token_info'):
         return redirect(url_for('dashboard'))
-    # Check if mobile and not logged in
-    if request.headers.get('User-Agent', '').lower().find('mobile') > -1:
-        session['mobile'] = True
     return render_template('index.html')
-    
+
 @app.route('/login')
 def login():
     try:
@@ -135,51 +97,31 @@ def login():
         flash('Failed to initialize login', 'error')
         return render_template('error.html', error="Authentication failed"), 500
 
-@app.route('/mobile')
-def mobile_redirect():
-    if session.get('token_info'):
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('index'))
-
 @app.route('/callback')
 def callback():
     try:
-        logger.info(f"Callback received - args: {request.args}")
-        error = request.args.get('error')
-        if error:
-            logger.error(f"Spotify auth error: {error}")
-            flash(f'Authentication error: {error}', 'error')
-            return redirect(url_for('index'))
-
         code = request.args.get('code')
         state = request.args.get('state')
         stored_state = session.get('oauth_state')
         
-        logger.info(f"State check - Received: {state}, Stored: {stored_state}")
-        
         if not code:
-            logger.error("No code received in callback")
             flash('Authentication failed: No code received', 'error')
             return redirect(url_for('index'))
         
         if state != stored_state:
-            logger.error(f"State mismatch: received {state}, expected {stored_state}")
             flash('Authentication failed: State verification failed', 'error')
             return redirect(url_for('index'))
 
-        # Get token
         token_info = spotify_service.get_token(code)
         if not token_info:
-            logger.error("No token info received")
             flash('Authentication failed: No token received', 'error')
             return redirect(url_for('index'))
             
         session['token_info'] = token_info
+        session['created_at'] = datetime.now().isoformat()
         
-        # Get user info
         sp = spotify_service.get_spotify_client()
         if not sp:
-            logger.error("Failed to create Spotify client")
             flash('Failed to initialize Spotify client', 'error')
             return redirect(url_for('index'))
             
@@ -190,7 +132,6 @@ def callback():
             'image': user_info['images'][0]['url'] if user_info.get('images') else None
         }
         
-        logger.info(f"Successfully authenticated user: {user_info['id']}")
         return redirect(url_for('dashboard'))
         
     except Exception as e:
@@ -198,16 +139,6 @@ def callback():
         flash(f'Authentication failed: {str(e)}', 'error')
         return redirect(url_for('index'))
 
-@app.errorhandler(404)
-def not_found_error(error):
-    if request.headers.get('User-Agent', '').lower().find('mobile') > -1:
-        # If it's a mobile device and we have a session, go to dashboard
-        if 'token_info' in session:
-            return redirect(url_for('dashboard'))
-        # If no session, go to index/login page
-        return redirect(url_for('index'))
-    return render_template('error.html', error="Page not found"), 404
-        
 @app.route('/dashboard')
 @spotify_service.require_auth
 def dashboard():
@@ -221,88 +152,6 @@ def dashboard():
         flash('Failed to load playlists', 'error')
         return redirect(url_for('index'))
 
-@app.route('/playlist/<playlist_id>/analyze')
-@spotify_service.require_auth
-@rate_limit
-def analyze_playlist(playlist_id):
-    try:
-        logger.info(f"Starting analysis for playlist: {playlist_id}")
-        manager = SpotifyPlaylistManager(playlist_id)
-        
-       
-        if not manager.verify_playlist():
-            logger.error(f"Playlist {playlist_id} not found or not accessible")
-            flash('Playlist not found or not accessible', 'error')
-            return redirect(url_for('dashboard'))
-        
-        analysis = manager.analyze_tracks()
-        
-        if not analysis:
-            logger.error("Analysis returned no data")
-            flash('Analysis failed - no data returned', 'error')
-            return redirect(url_for('dashboard'))
-        
-        return render_template('analysis.html', analysis=analysis)
-        
-    except Exception as e:
-        logger.error(f"Analysis error: {str(e)}", exc_info=True)
-        flash('An error occurred during analysis. Please try again.', 'error')
-        return redirect(url_for('dashboard'))
-
-@app.route('/api/playlist/<playlist_id>/similar', methods=['GET'])
-@spotify_service.require_auth
-@rate_limit
-def get_similar_tracks(playlist_id):
-    try:
-        manager = SpotifyPlaylistManager(playlist_id)
-        similar_tracks = manager.get_similar_tracks(limit=20)
-        return jsonify({
-            'tracks': similar_tracks,
-            'total': len(similar_tracks)
-        })
-    except Exception as e:
-        logger.error(f"Similar tracks error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/playlist/<playlist_id>/similar/add', methods=['POST'])
-@spotify_service.require_auth
-@rate_limit
-def add_similar_tracks(playlist_id):
-    try:
-        track_ids = request.json.get('track_ids', [])
-        if not track_ids:
-            return jsonify({'error': 'No tracks specified'}), 400
-
-        manager = SpotifyPlaylistManager(playlist_id)
-        manager.add_similar_tracks(track_ids)
-        
-        return jsonify({
-            'message': f'Successfully added {len(track_ids)} tracks',
-            'added_tracks': len(track_ids)
-        })
-    except Exception as e:
-        logger.error(f"Add similar tracks error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def catch_all(path):
-    if not path:  # If root path
-        if session.get('token_info'):
-            return redirect(url_for('dashboard'))
-        return render_template('index.html')
-    elif path == 'dashboard':
-        return redirect(url_for('dashboard'))
-    elif path == 'login':
-        return redirect(url_for('login'))
-    elif path == 'callback':
-        return redirect(url_for('callback'))
-    # For any other path, redirect to index
-    return redirect(url_for('index'))
-
-
-        
 @app.route('/api/analyze-optimization/<playlist_id>', methods=['POST'])
 @spotify_service.require_auth
 @rate_limit
@@ -311,96 +160,115 @@ def analyze_optimization(playlist_id):
         criteria = request.json
         if not criteria:
             return jsonify({'error': 'No criteria provided'}), 400
-
-        # Validate criteria
-        min_popularity = int(criteria.get('minPopularity', 30))
-        min_energy = float(criteria.get('minEnergy', 0.2))
             
         manager = SpotifyPlaylistManager(playlist_id)
-        analysis = manager.analyze_tracks()
+        
+        # Get the playlist tracks and analyze them
+        tracks = manager.get_playlist_tracks()
         
         tracks_to_remove = []
-        for track in analysis['track_details']:
+        for track in tracks:
+            if not track.get('track'):
+                continue
+                
+            track_data = track['track']
             reasons = []
             
-           
-            if track['popularity'] < min_popularity:
-                reasons.append(f"Low popularity ({track['popularity']}%)")
+            # Check popularity
+            if track_data['popularity'] < int(criteria.get('minPopularity', 30)):
+                reasons.append(f"Low popularity ({track_data['popularity']}%)")
             
-         
-            if track['energy'] < min_energy:
-                reasons.append(f"Low energy ({track['energy']*100:.0f}%)")
+            # Check energy
+            energy = manager.get_energy(track_data['id'])
+            if energy < float(criteria.get('minEnergy', 0.2)):
+                reasons.append(f"Low energy ({energy*100:.0f}%)")
             
             if reasons:
                 tracks_to_remove.append({
-                    'id': track['id'],
-                    'name': track['name'],
-                    'artist': track['artists'][0],
+                    'id': track_data['id'],
+                    'name': track_data['name'],
+                    'artist': track_data['artists'][0]['name'],
                     'reasons': reasons,
-                    'popularity': track['popularity'],
-                    'energy': track['energy']
+                    'popularity': track_data['popularity'],
+                    'energy': energy
                 })
         
         return jsonify({
             'tracksToRemove': tracks_to_remove,
-            'totalTracks': len(analysis['track_details']),
-            'affectedTracks': len(tracks_to_remove),
-            'criteria': {
-                'minPopularity': min_popularity,
-                'minEnergy': min_energy
-            }
+            'totalTracks': len(tracks),
+            'affectedTracks': len(tracks_to_remove)
         })
         
-    except ValueError as e:
-        logger.error(f"Invalid criteria format: {str(e)}")
-        return jsonify({'error': f'Invalid criteria format: {str(e)}'}), 400
     except Exception as e:
         logger.error(f"Optimization analysis error: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
-
-
-
-
-
-# Add a status endpoint
-@app.route('/api/optimize/status/<task_id>')
-def get_task_status(task_id):
-    task = optimize_playlist_task.AsyncResult(task_id)
-    if task.ready():
+@app.route('/api/optimize/<playlist_id>', methods=['POST'])
+@spotify_service.require_auth
+@rate_limit
+def optimize_playlist(playlist_id):
+    try:
+        criteria = request.json
+        if not criteria:
+            return jsonify({'error': 'No optimization criteria provided'}), 400
+            
+        manager = SpotifyPlaylistManager(playlist_id)
+        tracks_to_remove = []
+        
+        # Get all tracks
+        tracks = manager.get_playlist_tracks()
+        
+        for track in tracks:
+            if not track.get('track'):
+                continue
+                
+            track_data = track['track']
+            remove = False
+            
+            # Check criteria
+            if track_data['popularity'] < int(criteria.get('minPopularity', 30)):
+                remove = True
+            
+            energy = manager.get_energy(track_data['id'])
+            if energy < float(criteria.get('minEnergy', 0.2)):
+                remove = True
+            
+            if remove:
+                tracks_to_remove.append(track_data['id'])
+        
+        # Remove tracks if specified
+        if criteria.get('autoRemove') and tracks_to_remove:
+            track_uris = [f"spotify:track:{track_id}" for track_id in tracks_to_remove]
+            manager.sp.playlist_remove_all_occurrences_of_items(playlist_id, track_uris)
+        
         return jsonify({
-            'status': 'completed',
-            'result': task.result
+            'message': f'Successfully optimized playlist. Removed {len(tracks_to_remove)} tracks.',
+            'removedTracks': len(tracks_to_remove)
         })
-    return jsonify({
-        'status': 'processing'
-    })
+        
+    except Exception as e:
+        logger.error(f"Optimization error: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/logout', methods=['POST'])
 def logout():
     try:
         if spotify_service:
             spotify_service.clear_auth()
-        
-     
         session.clear()
-        
-      
         response = redirect(url_for('index'))
         response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         response.headers['Pragma'] = 'no-cache'
         response.headers['Expires'] = '0'
-        
         flash('Successfully logged out', 'success')
         return response
-        
     except Exception as e:
         logger.error(f"Logout error: {str(e)}")
         return redirect(url_for('index'))
 
 @app.errorhandler(404)
 def not_found_error(error):
-    return render_template('error.html', error="Page not found"), 404
+    return redirect(url_for('index'))
 
 @app.errorhandler(500)
 def internal_error(error):
@@ -410,7 +278,6 @@ def create_app():
     return app
 
 if __name__ == '__main__':
-   
     required_vars = ['SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET', 
                     'SPOTIFY_REDIRECT_URI', 'FLASK_SECRET_KEY']
     missing_vars = [var for var in required_vars if not os.getenv(var)]
