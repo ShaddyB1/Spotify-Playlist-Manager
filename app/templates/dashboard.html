@@ -106,7 +106,7 @@
                 <div id="similarSongsSection" class="hidden">
                     <h4 class="text-lg font-medium text-white mb-3">Similar Songs</h4>
                     <div id="similarSongsList" class="max-h-96 overflow-y-auto space-y-2">
-                        <!-- Similar songs will be inserted here -->
+                      
                     </div>
                 </div>
 
@@ -209,12 +209,12 @@
 
 {% block scripts %}
 <script>
-// Global variables
+
 let currentPlaylistId = null;
 let selectedSimilarTracks = new Set();
 let debounceTimeout;
 
-// Loading overlay functions
+
 function showLoading() {
     document.getElementById('loadingOverlay').classList.remove('hidden');
     document.getElementById('loadingOverlay').classList.add('flex');
@@ -225,7 +225,7 @@ function hideLoading() {
     document.getElementById('loadingOverlay').classList.remove('flex');
 }
 
-// Error handling
+
 function showError(message) {
     const toast = document.createElement('div');
     toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
@@ -255,7 +255,7 @@ function showNotification(message, type = 'success') {
     }, 3000);
 }
 
-// Playlist actions modal
+
 function openPlaylistActions(playlistId) {
     currentPlaylistId = playlistId;
     document.getElementById('playlistActionsModal').classList.remove('hidden');
@@ -381,7 +381,7 @@ async function addSelectedTracks() {
     }
 }
 
-// Optimize modal functions
+
 function openOptimizeModal() {
     document.getElementById('optimizeModal').classList.remove('hidden');
     document.getElementById('optimizeModal').classList.add('flex');
@@ -465,7 +465,7 @@ async function confirmOptimization() {
     }
 }
 
-// Search and sort functionality
+
 const searchInput = document.getElementById('searchPlaylists');
 const sortSelect = document.getElementById('sortPlaylists');
 
