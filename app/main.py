@@ -19,7 +19,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
+celery = Celery('tasks', broker='redis://localhost:6379/0')
 
 app = Flask(__name__)
 
@@ -313,9 +313,25 @@ def optimize_playlist(playlist_id):
         if not criteria:
             return jsonify({'error': 'No optimization criteria provided'}), 400
             
+        # Start a background task
+        task = optimize_playlist_task.delay(playlist_id, criteria)
+        
+        # Return task ID immediately
+        return jsonify({
+            'task_id': task.id,
+            'status': 'processing',
+            'message': 'Optimization started'
+        })
+        
+    except Exception as e:
+        logger.error(f"Unexpected optimization error: {str(e)}", exc_info=True)
+        return jsonify({'error': 'An unexpected error occurred during optimization'}), 500
+
+# Celery task
+@celery.task
+def optimize_playlist_task(playlist_id, criteria):
+    try:
         manager = SpotifyPlaylistManager(playlist_id)
-        
-        
         validated_criteria = {
             'minPopularity': int(criteria.get('minPopularity', 30)),
             'minEnergy': float(criteria.get('minEnergy', 0.2)),
@@ -323,17 +339,23 @@ def optimize_playlist(playlist_id):
         }
         
         result = manager.optimize_playlist(validated_criteria)
-        return jsonify(result)
-        
-    except ValueError as e:
-        logger.error(f"Invalid criteria format: {str(e)}")
-        return jsonify({'error': f'Invalid criteria format: {str(e)}'}), 400
-    except PlaylistAnalysisError as e:
-        logger.error(f"Optimization error: {str(e)}")
-        return jsonify({'error': str(e)}), 400
+        return result
     except Exception as e:
-        logger.error(f"Unexpected optimization error: {str(e)}", exc_info=True)
-        return jsonify({'error': 'An unexpected error occurred during optimization'}), 500
+        logger.error(f"Task error: {str(e)}")
+        return {'error': str(e)}
+
+# Add a status endpoint
+@app.route('/api/optimize/status/<task_id>')
+def get_task_status(task_id):
+    task = optimize_playlist_task.AsyncResult(task_id)
+    if task.ready():
+        return jsonify({
+            'status': 'completed',
+            'result': task.result
+        })
+    return jsonify({
+        'status': 'processing'
+    })
 
 @app.route('/logout', methods=['POST'])
 def logout():
