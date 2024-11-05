@@ -306,6 +306,9 @@ def analyze_optimization(playlist_id):
         logger.error(f"Optimization analysis error: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+
+
+
 @app.route('/api/optimize/<playlist_id>', methods=['POST'])
 @spotify_service.require_auth
 @rate_limit
