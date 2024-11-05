@@ -266,6 +266,49 @@ def logout():
         logger.error(f"Logout error: {str(e)}")
         return redirect(url_for('index'))
 
+@app.route('/api/playlist/<playlist_id>/similar', methods=['GET'])
+@spotify_service.require_auth
+@rate_limit
+def get_similar_tracks(playlist_id):
+    try:
+        logger.info(f"Starting similar tracks request for playlist: {playlist_id}")
+        
+        # Initialize manager
+        manager = SpotifyPlaylistManager(playlist_id)
+        
+        # Verify playlist exists and is accessible
+        if not manager.verify_playlist():
+            logger.error(f"Playlist {playlist_id} not found or not accessible")
+            return jsonify({
+                'error': 'Playlist not found or not accessible'
+            }), 404
+        
+        # Get similar tracks
+        similar_tracks = manager.get_similar_tracks(limit=20)
+        
+        if not similar_tracks:
+            logger.warning("No similar tracks found")
+            return jsonify({
+                'tracks': [],
+                'total': 0,
+                'message': 'No similar tracks found'
+            })
+
+        response = {
+            'tracks': similar_tracks,
+            'total': len(similar_tracks)
+        }
+        
+        logger.info(f"Successfully found {len(similar_tracks)} similar tracks")
+        return jsonify(response)
+        
+    except Exception as e:
+        logger.error(f"Similar tracks error: {str(e)}", exc_info=True)
+        return jsonify({
+            'error': 'Failed to fetch similar tracks',
+            'details': str(e)
+        }), 500
+
 @app.errorhandler(404)
 def not_found_error(error):
     return redirect(url_for('index'))
