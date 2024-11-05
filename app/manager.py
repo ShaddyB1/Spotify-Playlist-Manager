@@ -26,7 +26,7 @@ class SpotifyRateLimitError(Exception):
 
 class SpotifyPlaylistManager:
     def __init__(self, playlist_id: str):
-        """Initialize the Spotify client with comprehensive scope."""
+        """Initialize the Spotify client with comprehensive scope and improved settings."""
         load_dotenv()
         
         self.scope = (
@@ -51,13 +51,14 @@ class SpotifyPlaylistManager:
                 client_secret=os.getenv('SPOTIFY_CLIENT_SECRET'),
                 redirect_uri=os.getenv('SPOTIFY_REDIRECT_URI'),
                 scope=self.scope,
-                cache_handler=None  # Prevent caching issues
+                cache_handler=None
             )
             
             self.sp = spotipy.Spotify(
                 auth_manager=auth_manager,
-                requests_timeout=10,
-                retries=retry_strategy
+                requests_timeout=60,  
+                retries=retry_strategy,
+                backoff_factor=2
             )
             self.playlist_id = playlist_id
             self.rate_limit_delay = 1  
@@ -120,33 +121,54 @@ class SpotifyPlaylistManager:
             raise PlaylistAnalysisError(f"Failed to get playlist tracks: {str(e)}")
 
     def get_audio_features_batch(self, track_ids: List[str]) -> Dict[str, float]:
-        """Get audio features for multiple tracks in one request with improved batching."""
+        """Get audio features for multiple tracks in one request with improved rate limiting."""
         try:
             features_dict = {}
-            batch_size = 50  
+            batch_size = 25  
             
             
             valid_track_ids = [tid for tid in track_ids if tid]
             
             for i in range(0, len(valid_track_ids), batch_size):
+                retries = 3
                 batch = valid_track_ids[i:i+batch_size]
                 
-                try:
-                    
-                    time.sleep(self.rate_limit_delay)
-                    
-                    features = self._make_spotify_request(self.sp.audio_features, batch)
-                    
-                    if features:
-                        for track_id, feature in zip(batch, features):
-                            if feature:
-                                features_dict[track_id] = feature.get('energy', 0.0)
-                            else:
-                                features_dict[track_id] = 0.0
-                                
-                except Exception as batch_error:
-                    logger.error(f"Error processing batch: {str(batch_error)}")
-                    
+                while retries > 0:
+                    try:
+                        
+                        time.sleep(self.rate_limit_delay)
+                        
+                        features = self._make_spotify_request(
+                            self.sp.audio_features,
+                            batch
+                        )
+                        
+                        if features:
+                            for track_id, feature in zip(batch, features):
+                                if feature:
+                                    features_dict[track_id] = feature.get('energy', 0.0)
+                                else:
+                                    features_dict[track_id] = 0.0
+                                    
+                        
+                        self.rate_limit_delay = 1
+                        break  
+                        
+                    except Exception as e:
+                        if 'status: 429' in str(e):
+                            
+                            retry_after = int(e.headers.get('Retry-After', 3)) if hasattr(e, 'headers') else 3
+                            logger.warning(f"Rate limit hit, waiting {retry_after} seconds")
+                            time.sleep(retry_after)
+                            self.rate_limit_delay *= 2  
+                            retries -= 1
+                        else:
+                            logger.error(f"Error processing batch: {str(e)}")
+                            break
+                
+                
+                if retries == 0:
+                    logger.warning(f"Failed to get features for batch after all retries")
                     for track_id in batch:
                         features_dict[track_id] = 0.0
                         
@@ -278,7 +300,7 @@ class SpotifyPlaylistManager:
                         'uri': track.get('uri', '')
                     }
 
-                    # Update distributions
+                    
                     analysis['popularity_distribution'][track_info['popularity'] // 10 * 10] += 1
                     analysis['energy_ranges'][int(track_info['energy'] * 10) * 10] += 1
                     analysis['key_distribution'][track_info['key']] += 1
@@ -367,7 +389,7 @@ class SpotifyPlaylistManager:
         try:
             logger.info(f"Starting playlist optimization with criteria: {criteria}")
             
-            #track analysis
+            
             analysis = self.analyze_tracks()
             
             if not analysis['track_details']:
@@ -486,7 +508,7 @@ class SpotifyPlaylistManager:
                 logger.error(f"Error getting recommendations: {str(e)}")
                 return []
 
-            # Get existing track IDs for filtering
+            
             existing_track_ids = {
                 track['track']['id'] for track in tracks 
                 if track.get('track', {}).get('id')
