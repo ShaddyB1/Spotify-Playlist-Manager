@@ -8,6 +8,7 @@ from typing import Dict, List, Optional
 from collections import defaultdict
 from typing import Any
 import time
+from requests.exceptions import RequestException
 
 logging.basicConfig(
     level=logging.INFO,
@@ -17,6 +18,10 @@ logger = logging.getLogger(__name__)
 
 class PlaylistAnalysisError(Exception):
     """Custom exception for playlist analysis errors."""
+    pass
+
+class SpotifyRateLimitError(Exception):
+    """Custom exception for rate limit errors."""
     pass
 
 class SpotifyPlaylistManager:
@@ -32,81 +37,119 @@ class SpotifyPlaylistManager:
         )
         
         try:
+            from requests.adapters import HTTPAdapter
+            from requests.packages.urllib3.util.retry import Retry
+
+            retry_strategy = Retry(
+                total=3,
+                backoff_factor=1,
+                status_forcelist=[429, 500, 502, 503, 504]
+            )
+
             auth_manager = SpotifyOAuth(
                 client_id=os.getenv('SPOTIFY_CLIENT_ID'),
                 client_secret=os.getenv('SPOTIFY_CLIENT_SECRET'),
                 redirect_uri=os.getenv('SPOTIFY_REDIRECT_URI'),
-                scope=self.scope
+                scope=self.scope,
+                cache_handler=None  # Prevent caching issues
             )
             
             self.sp = spotipy.Spotify(
                 auth_manager=auth_manager,
                 requests_timeout=10,
-                retries=3,
-                backoff_factor=2
+                retries=retry_strategy
             )
             self.playlist_id = playlist_id
+            self.rate_limit_delay = 1  
             logger.info(f"Successfully initialized SpotifyPlaylistManager for playlist: {playlist_id}")
         except Exception as e:
             logger.error(f"Failed to initialize Spotify client: {str(e)}")
             raise
 
+    def _handle_rate_limit(self, e: Exception) -> None:
+        """Handle rate limit errors with exponential backoff."""
+        if hasattr(e, 'headers') and 'Retry-After' in e.headers:
+            delay = int(e.headers['Retry-After'])
+        else:
+            delay = self.rate_limit_delay
+            self.rate_limit_delay *= 2  
+        
+        logger.warning(f"Rate limit hit, waiting {delay} seconds")
+        time.sleep(delay)
+
+
+
+    def _make_spotify_request(self, func, *args, **kwargs):
+        """Make a Spotify API request with retry logic and rate limiting."""
+        max_retries = 3
+        retry_count = 0
+
+        while retry_count < max_retries:
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if 'status: 429' in str(e) and retry_count < max_retries - 1:
+                    self._handle_rate_limit(e)
+                    retry_count += 1
+                    continue
+                raise e
 
     def get_playlist_tracks(self) -> List[Dict]:
         """Get all tracks from the playlist with pagination."""
         try:
             tracks = []
-            results = self.sp.playlist_tracks(self.playlist_id)
+            results = self._make_spotify_request(self.sp.playlist_tracks, self.playlist_id)
             
             while results:
                 tracks.extend(results['items'])
                 if results['next']:
-                    results = self.sp.next(results)
+                    results = self._make_spotify_request(self.sp.next, results)
                 else:
                     break
+            
+            
+            valid_tracks = [
+                track for track in tracks 
+                if track and track.get('track') and track['track'].get('id')
+            ]
                     
-            logger.info(f"Retrieved {len(tracks)} tracks from playlist {self.playlist_id}")
-            return tracks
+            logger.info(f"Retrieved {len(valid_tracks)} tracks from playlist {self.playlist_id}")
+            return valid_tracks
         except Exception as e:
             logger.error(f"Error retrieving playlist tracks: {str(e)}")
             raise PlaylistAnalysisError(f"Failed to get playlist tracks: {str(e)}")
 
     def get_audio_features_batch(self, track_ids: List[str]) -> Dict[str, float]:
-        """Get audio features for multiple tracks in one request."""
+        """Get audio features for multiple tracks in one request with improved batching."""
         try:
             features_dict = {}
-            batch_size = 50  # Reduce batch size from 100 to 50
+            batch_size = 50  
             
-            for i in range(0, len(track_ids), batch_size):
-                retries = 3
-                batch = track_ids[i:i+batch_size]
+            
+            valid_track_ids = [tid for tid in track_ids if tid]
+            
+            for i in range(0, len(valid_track_ids), batch_size):
+                batch = valid_track_ids[i:i+batch_size]
                 
-                while retries > 0:
-                    try:
-                        # Add longer delay between batches
-                        time.sleep(2)  # Increased from 1 to 2 seconds
-                        
-                        features = self.sp.audio_features(batch)
-                        
-                        # Process the batch results
+                try:
+                    
+                    time.sleep(self.rate_limit_delay)
+                    
+                    features = self._make_spotify_request(self.sp.audio_features, batch)
+                    
+                    if features:
                         for track_id, feature in zip(batch, features):
                             if feature:
                                 features_dict[track_id] = feature.get('energy', 0.0)
                             else:
                                 features_dict[track_id] = 0.0
                                 
-                        break  # Success, exit retry loop
+                except Exception as batch_error:
+                    logger.error(f"Error processing batch: {str(batch_error)}")
+                    
+                    for track_id in batch:
+                        features_dict[track_id] = 0.0
                         
-                    except Exception as e:
-                        if 'status: 429' in str(e):
-                            # Get retry-after header if available
-                            retry_after = int(e.headers.get('Retry-After', 3)) if hasattr(e, 'headers') else 3
-                            time.sleep(retry_after)
-                            retries -= 1
-                        else:
-                            logger.error(f"Error processing batch: {str(e)}")
-                            break
-                            
             return features_dict
         except Exception as e:
             logger.error(f"Error getting audio features for batch: {str(e)}")
@@ -114,6 +157,9 @@ class SpotifyPlaylistManager:
 
     def get_energy(self, track_id: str) -> float:
         """Get energy level for a single track."""
+        if not track_id:
+            return 0.0
+            
         try:
             features = self.get_audio_features_batch([track_id])
             return features.get(track_id, 0.0)
@@ -121,116 +167,36 @@ class SpotifyPlaylistManager:
             logger.error(f"Error getting energy for track {track_id}: {str(e)}")
             return 0.0
 
-    def convert_to_serializable(self, data):
-        """Convert complex data types to serializable Python types."""
-        if isinstance(data, defaultdict):
-            return dict(data)
-        elif isinstance(data, (set, type({}.items()))):  
-            return list(data)
-        elif isinstance(data, dict):
-            return {k: self.convert_to_serializable(v) for k, v in data.items()}
-        elif isinstance(data, (list, tuple)):
-            return [self.convert_to_serializable(x) for x in data]
-        return data
-
-
-    
-
-
-    
-    def optimize_playlist(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
-        """Optimize playlist based on given criteria."""
-        try:
-            logger.info(f"Starting playlist optimization with criteria: {criteria}")
-            
-            
-            analysis = self.analyze_tracks()
-            
-            if not analysis['track_details']:
-                raise PlaylistAnalysisError("No tracks found in playlist")
-                
-            tracks_to_remove = []
-            for track in analysis['track_details']:
-                reasons = []
-                
-                
-                min_popularity = int(criteria.get('minPopularity', 30))
-                if track['popularity'] < min_popularity:
-                    reasons.append(f"Low popularity ({track['popularity']}%)")
-                
-                min_energy = float(criteria.get('minEnergy', 0.2))
-                if track['energy'] < min_energy:
-                    reasons.append(f"Low energy ({track['energy']*100:.0f}%)")
-                    
-                if reasons:
-                    tracks_to_remove.append({
-                        'id': track['id'],
-                        'name': track['name'],
-                        'artist': track['artists'][0] if track['artists'] else 'Unknown Artist',
-                        'popularity': track['popularity'],
-                        'energy': track['energy'],
-                        'reasons': reasons
-                    })
-            
-            
-            removed_tracks = []
-            if criteria.get('autoRemove'):
-                track_uris = [f"spotify:track:{track['id']}" for track in tracks_to_remove]
-                
-               
-                for i in range(0, len(track_uris), 100):
-                    batch = track_uris[i:i+100]
-                    try:
-                        self.sp.playlist_remove_all_occurrences_of_items(self.playlist_id, batch)
-                        removed_tracks.extend(batch)
-                    except Exception as e:
-                        logger.error(f"Error removing batch of tracks: {str(e)}")
-            
-            result = {
-                'tracksAnalyzed': len(analysis['track_details']),
-                'tracksToRemove': tracks_to_remove,
-                'tracksRemoved': len(removed_tracks) if criteria.get('autoRemove') else 0,
-                'criteriaUsed': {
-                    'minPopularity': min_popularity,
-                    'minEnergy': min_energy,
-                    'autoRemove': criteria.get('autoRemove', False)
-                },
-                'playlistName': analysis.get('playlist_name', '')
-            }
-            
-            logger.info(f"Optimization complete. Found {len(tracks_to_remove)} tracks to remove.")
-            return self.convert_to_serializable(result)
-            
-        except Exception as e:
-            logger.error(f"Optimization error: {str(e)}", exc_info=True)
-            raise PlaylistAnalysisError(f"Failed to optimize playlist: {str(e)}")
-
-    
-
     def analyze_tracks(self) -> Dict[str, Any]:
         """Analyze tracks for potential removal based on multiple factors."""
         try:
-            # Get playlist info first
             logger.info("Getting playlist information")
-            playlist_info = self.sp.playlist(self.playlist_id, fields='name')
+            playlist_info = self._make_spotify_request(
+                self.sp.playlist, 
+                self.playlist_id, 
+                fields='name'
+            )
             
             logger.info("Starting get_playlist_tracks")
             tracks = self.get_playlist_tracks()
             logger.info(f"Retrieved {len(tracks)} tracks")
             
             logger.info("Getting recently played tracks")
-            recent_plays = self.sp.current_user_recently_played(limit=50)
-            logger.info(f"Retrieved {len(recent_plays['items'])} recent plays")
-            
-            # lookup for recently played tracks
-            recent_plays_lookup = {
-                item['track']['id']: {
-                    'played_at': datetime.fromisoformat(item['played_at'].replace('Z', '+00:00')),
-                    'context': item.get('context')
-                } for item in recent_plays['items']
-            }
-            
-            # Initialize analysis dictionary with default values
+            try:
+                recent_plays = self._make_spotify_request(
+                    self.sp.current_user_recently_played,
+                    limit=50
+                )
+                recent_plays_lookup = {
+                    item['track']['id']: {
+                        'played_at': datetime.fromisoformat(item['played_at'].replace('Z', '+00:00')),
+                        'context': item.get('context')
+                    } for item in recent_plays['items'] if item.get('track', {}).get('id')
+                }
+            except Exception as e:
+                logger.warning(f"Failed to get recent plays: {e}")
+                recent_plays_lookup = {}
+
             analysis = {
                 'playlist_name': playlist_info.get('name', 'Untitled Playlist'),
                 'total_tracks': len(tracks),
@@ -245,55 +211,83 @@ class SpotifyPlaylistManager:
                 'decade_distribution': defaultdict(int),
                 'total_duration_ms': 0,
                 'explicit_tracks': 0,
-                'preview_available': 0
+                'preview_available': 0,
+                'energy_ranges': defaultdict(int),
+                'tempo_distribution': defaultdict(int),
+                'key_distribution': defaultdict(int),
+                'mode_distribution': defaultdict(int),
+                'time_signature_distribution': defaultdict(int)
             }
+
+            track_ids = [track['track']['id'] for track in tracks if track.get('track', {}).get('id')]
             
-            logger.info("Starting track analysis loop")
-            track_ids = set()
             
-            for i, track_item in enumerate(tracks):
+            all_audio_features = {}
+            for i in range(0, len(track_ids), 50):
+                batch_ids = track_ids[i:i+50]
+                try:
+                    batch_features = self._make_spotify_request(
+                        self.sp.audio_features,
+                        batch_ids
+                    )
+                    for track_id, features in zip(batch_ids, batch_features):
+                        if features:
+                            all_audio_features[track_id] = features
+                except Exception as e:
+                    logger.error(f"Error getting audio features batch: {e}")
+                    time.sleep(2)  
+
+            seen_track_ids = set()
+            
+            for track_item in tracks:
                 try:
                     track = track_item.get('track')
-                    if not track:
-                        logger.warning(f"Skipping track at index {i} - no track data")
+                    if not track or not track.get('id'):
                         continue
+
+                    track_id = track['id']
                     
-                    track_id = track.get('id')
-                    if not track_id:
-                        logger.warning(f"Skipping track at index {i} - no track ID")
-                        continue
+                    # Check for duplicates
+                    if track_id in seen_track_ids:
+                        analysis['duplicates'].append(track['name'])
+                    seen_track_ids.add(track_id)
+
                     
-                    # duplicates
-                    if track_id in track_ids:
-                        analysis['duplicates'].append(track.get('name', 'Unknown Track'))
-                    track_ids.add(track_id)
+                    audio_features = all_audio_features.get(track_id, {})
                     
-                   
-                    energy = self.get_energy(track_id)
-                    
-                    # track info dictionary
                     track_info = {
                         'id': track_id,
-                        'name': track.get('name', 'Unknown Track'),
-                        'artists': [artist.get('name', 'Unknown Artist') for artist in track.get('artists', [])],
+                        'name': track['name'],
+                        'artists': [artist['name'] for artist in track['artists']],
                         'added_at': track_item.get('added_at', ''),
                         'popularity': track.get('popularity', 0),
                         'duration_ms': track.get('duration_ms', 0),
                         'explicit': track.get('explicit', False),
                         'preview_url': track.get('preview_url'),
-                        'energy': energy,
+                        'energy': audio_features.get('energy', 0.0),
+                        'tempo': audio_features.get('tempo', 0.0),
+                        'key': audio_features.get('key', -1),
+                        'mode': audio_features.get('mode', 0),
+                        'time_signature': audio_features.get('time_signature', 4),
+                        'danceability': audio_features.get('danceability', 0.0),
+                        'instrumentalness': audio_features.get('instrumentalness', 0.0),
+                        'valence': audio_features.get('valence', 0.0),
                         'album': track.get('album', {}).get('name', 'Unknown Album'),
-                        'release_date': track.get('album', {}).get('release_date', '')
+                        'release_date': track.get('album', {}).get('release_date', ''),
+                        'album_type': track.get('album', {}).get('album_type', 'unknown'),
+                        'uri': track.get('uri', '')
                     }
-                    
-                   
-                    popularity_bracket = (track_info['popularity'] // 10) * 10
-                    analysis['popularity_distribution'][popularity_bracket] += 1
-                    
+
+                    # Update distributions
+                    analysis['popularity_distribution'][track_info['popularity'] // 10 * 10] += 1
+                    analysis['energy_ranges'][int(track_info['energy'] * 10) * 10] += 1
+                    analysis['key_distribution'][track_info['key']] += 1
+                    analysis['mode_distribution'][track_info['mode']] += 1
+                    analysis['time_signature_distribution'][track_info['time_signature']] += 1
+
                     for artist in track_info['artists']:
                         analysis['artist_distribution'][artist] += 1
-                    
-                 
+
                     if track_info['release_date']:
                         try:
                             year = int(track_info['release_date'][:4])
@@ -301,129 +295,341 @@ class SpotifyPlaylistManager:
                             analysis['decade_distribution'][decade] += 1
                         except (ValueError, TypeError):
                             pass
-                    
-                    # Check recent plays
+
                     if track_id in recent_plays_lookup:
                         track_info['last_played'] = recent_plays_lookup[track_id]['played_at'].isoformat()
                         analysis['played_tracks'] += 1
                     else:
                         track_info['last_played'] = None
                         analysis['inactive_tracks'] += 1
-                    
-                   
+
                     analysis['total_duration_ms'] += track_info['duration_ms']
                     if track_info['explicit']:
                         analysis['explicit_tracks'] += 1
                     if track_info['preview_url']:
                         analysis['preview_available'] += 1
-                    
+
                     analysis['track_details'].append(track_info)
-                    
+
                 except Exception as track_error:
-                    logger.error(f"Error processing track at index {i}: {str(track_error)}")
+                    logger.error(f"Error processing track: {str(track_error)}")
                     continue
+
             
-            # Calculate averages and percentages
-            track_count = len(analysis['track_details'])
-            if track_count > 0:
+            if len(analysis['track_details']) > 0:
                 analysis.update({
-                    'average_popularity': sum(t['popularity'] for t in analysis['track_details']) / track_count,
-                    'average_energy': sum(t['energy'] for t in analysis['track_details']) / track_count,
-                    'explicit_percentage': (analysis['explicit_tracks'] / track_count) * 100,
-                    'preview_percentage': (analysis['preview_available'] / track_count) * 100,
-                    'active_percentage': (analysis['played_tracks'] / track_count) * 100
+                    'average_popularity': sum(t['popularity'] for t in analysis['track_details']) / len(analysis['track_details']),
+                    'average_energy': sum(t['energy'] for t in analysis['track_details']) / len(analysis['track_details']),
+                    'average_tempo': sum(t['tempo'] for t in analysis['track_details']) / len(analysis['track_details']),
+                    'average_danceability': sum(t['danceability'] for t in analysis['track_details']) / len(analysis['track_details']),
+                    'average_valence': sum(t['valence'] for t in analysis['track_details']) / len(analysis['track_details']),
+                    'explicit_percentage': (analysis['explicit_tracks'] / len(analysis['track_details'])) * 100,
+                    'active_percentage': (analysis['played_tracks'] / len(analysis['track_details'])) * 100
                 })
             else:
                 analysis.update({
                     'average_popularity': 0,
                     'average_energy': 0,
+                    'average_tempo': 0,
+                    'average_danceability': 0,
+                    'average_valence': 0,
                     'explicit_percentage': 0,
-                    'preview_percentage': 0,
                     'active_percentage': 0
                 })
+
             
-           
-            final_analysis = self.convert_to_serializable(analysis)
-            
-            # Sort distributions by value
-            for dist_key in ['artist_distribution', 'popularity_distribution', 'decade_distribution']:
-                if dist_key in final_analysis:
-                    final_analysis[dist_key] = dict(sorted(
-                        final_analysis[dist_key].items(),
-                        key=lambda x: x[1],
-                        reverse=True
-                    ))
-            
+            for dist_key in [
+                'artist_distribution', 
+                'popularity_distribution', 
+                'decade_distribution',
+                'energy_ranges',
+                'key_distribution',
+                'mode_distribution'
+            ]:
+                if dist_key in analysis:
+                    analysis[dist_key] = dict(
+                        sorted(
+                            analysis[dist_key].items(),
+                            key=lambda x: x[1],
+                            reverse=True
+                        )
+                    )
+
             logger.info(f"Completed analysis for playlist {self.playlist_id}")
-            return final_analysis
-            
+            return self.convert_to_serializable(analysis)
+
         except Exception as e:
             logger.error(f"Error analyzing tracks: {str(e)}", exc_info=True)
-            raise PlaylistAnalysisError(f"Failed to analyze tracks: {str(e)}")
+            raise PlaylistAnalysisError(f"Failed to analyze tracks: {str(e)}")  
+
+    def optimize_playlist(self, criteria: Dict[str, Any]) -> Dict[str, Any]:
+        """Optimize playlist based on given criteria with improved error handling."""
+        try:
+            logger.info(f"Starting playlist optimization with criteria: {criteria}")
             
+            #track analysis
+            analysis = self.analyze_tracks()
+            
+            if not analysis['track_details']:
+                raise PlaylistAnalysisError("No tracks found in playlist")
+                
+            tracks_to_remove = []
+            min_popularity = int(criteria.get('minPopularity', 30))
+            min_energy = float(criteria.get('minEnergy', 0.2))
+            
+            for track in analysis['track_details']:
+                reasons = []
+                
+                
+                try:
+                    if track['popularity'] < min_popularity:
+                        reasons.append(f"Low popularity ({track['popularity']}%)")
+                    
+                    if track['energy'] < min_energy:
+                        reasons.append(f"Low energy ({track['energy']*100:.0f}%)")
+                        
+                    if reasons:
+                        tracks_to_remove.append({
+                            'id': track['id'],
+                            'name': track['name'],
+                            'artist': track['artists'][0] if track['artists'] else 'Unknown Artist',
+                            'popularity': track['popularity'],
+                            'energy': track['energy'],
+                            'reasons': reasons
+                        })
+                except (KeyError, TypeError) as e:
+                    logger.warning(f"Error processing track criteria: {str(e)}")
+                    continue
+            
+            
+            removed_tracks = []
+            if criteria.get('autoRemove') and tracks_to_remove:
+                try:
+                    track_uris = [f"spotify:track:{track['id']}" for track in tracks_to_remove]
+                    
+                    
+                    for i in range(0, len(track_uris), 100):
+                        batch = track_uris[i:i+100]
+                        try:
+                            time.sleep(self.rate_limit_delay)  
+                            self._make_spotify_request(
+                                self.sp.playlist_remove_all_occurrences_of_items,
+                                self.playlist_id,
+                                batch
+                            )
+                            removed_tracks.extend(batch)
+                        except Exception as batch_error:
+                            logger.error(f"Error removing batch of tracks: {str(batch_error)}")
+                except Exception as remove_error:
+                    logger.error(f"Error during track removal: {str(remove_error)}")
+            
+            result = {
+                'playlistName': analysis['playlist_name'],
+                'tracksAnalyzed': len(analysis['track_details']),
+                'tracksToRemove': tracks_to_remove,
+                'tracksRemoved': len(removed_tracks) if criteria.get('autoRemove') else 0,
+                'criteriaUsed': {
+                    'minPopularity': min_popularity,
+                    'minEnergy': min_energy,
+                    'autoRemove': criteria.get('autoRemove', False)
+                }
+            }
+            
+            logger.info(f"Optimization complete. Found {len(tracks_to_remove)} tracks to remove.")
+            return self.convert_to_serializable(result)
+            
+        except Exception as e:
+            logger.error(f"Optimization error: {str(e)}", exc_info=True)
+            raise PlaylistAnalysisError(f"Failed to optimize playlist: {str(e)}")
+
     def get_similar_tracks(self, limit: int = 20) -> List[Dict]:
-        """Get similar tracks based on playlist tracks."""
+        """Get similar tracks with improved error handling and rate limiting."""
         try:
             tracks = self.get_playlist_tracks()
             if not tracks:
                 return []
 
-            # Get seed tracks and audio features
-            seed_tracks = [t['track']['id'] for t in tracks[:5] if t['track']]
-            audio_features = [self.get_energy(track_id) for track_id in seed_tracks]
+            #seed tracks 
+            seed_tracks = []
+            seed_energies = []
             
-           
-            avg_energy = sum(audio_features) / len(audio_features) if audio_features else 0.5
+            for track in tracks:
+                if len(seed_tracks) >= 5:
+                    break
+                    
+                track_data = track.get('track', {})
+                if track_data and track_data.get('id'):
+                    seed_tracks.append(track_data['id'])
+                    try:
+                        energy = self.get_energy(track_data['id'])
+                        seed_energies.append(energy)
+                    except Exception as e:
+                        logger.warning(f"Error getting energy for seed track: {str(e)}")
+                        seed_energies.append(0.5)  
             
-      
-            recommendations = self.sp.recommendations(
-                seed_tracks=seed_tracks[:5],
-                limit=limit,
-                target_energy=avg_energy,
-                min_popularity=30
-            )
+            if not seed_tracks:
+                return []
+                
+            
+            avg_energy = sum(seed_energies) / len(seed_energies)
+            
+            
+            try:
+                recommendations = self._make_spotify_request(
+                    self.sp.recommendations,
+                    seed_tracks=seed_tracks[:5],
+                    limit=limit,
+                    target_energy=avg_energy,
+                    min_popularity=30
+                )
+            except Exception as e:
+                logger.error(f"Error getting recommendations: {str(e)}")
+                return []
 
-            existing_track_ids = {track['track']['id'] for track in tracks if track['track']}
-            similar_tracks = [
-                {
-                    'id': track['id'],
-                    'name': track['name'],
-                    'artist': track['artists'][0]['name'],
-                    'popularity': track['popularity'],
-                    'preview_url': track['preview_url'],
-                    'image': track['album']['images'][0]['url'] if track['album']['images'] else None
-                }
-                for track in recommendations['tracks']
-                if track['id'] not in existing_track_ids
-            ]
+            # Get existing track IDs for filtering
+            existing_track_ids = {
+                track['track']['id'] for track in tracks 
+                if track.get('track', {}).get('id')
+            }
+
+            
+            similar_tracks = []
+            for track in recommendations['tracks']:
+                if track['id'] not in existing_track_ids:
+                    try:
+                        similar_tracks.append({
+                            'id': track['id'],
+                            'name': track['name'],
+                            'artist': track['artists'][0]['name'] if track['artists'] else 'Unknown Artist',
+                            'popularity': track.get('popularity', 0),
+                            'preview_url': track.get('preview_url'),
+                            'image': (track.get('album', {}).get('images', [{}])[0].get('url')
+                                    if track.get('album', {}).get('images') else None)
+                        })
+                    except Exception as track_error:
+                        logger.warning(f"Error processing recommendation: {str(track_error)}")
+                        continue
 
             return similar_tracks
 
         except Exception as e:
             logger.error(f"Error finding similar tracks: {str(e)}")
-            raise
+            raise PlaylistAnalysisError(f"Failed to get similar tracks: {str(e)}")
+
+
+    def add_similar_tracks(self, track_ids: List[str]) -> bool:
+        """Add similar tracks with improved error handling and rate limiting."""
+        try:
+            if not track_ids:
+                return False
+
+            track_uris = [f"spotify:track:{track_id}" for track_id in track_ids if track_id]
+            
+            
+            for i in range(0, len(track_uris), 100):
+                batch = track_uris[i:i+100]
+                try:
+                    time.sleep(self.rate_limit_delay)
+                    self._make_spotify_request(
+                        self.sp.playlist_add_items,
+                        self.playlist_id,
+                        batch
+                    )
+                except Exception as batch_error:
+                    logger.error(f"Error adding batch of tracks: {str(batch_error)}")
+                    raise
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error adding similar tracks: {str(e)}")
+            raise PlaylistAnalysisError(f"Failed to add similar tracks: {str(e)}")
 
     def verify_playlist(self) -> bool:
-        """Verify that the playlist exists and is accessible."""
+        """Verify playlist exists and is accessible."""
         try:
-            playlist = self.sp.playlist(self.playlist_id, fields='id,name')
+            playlist = self._make_spotify_request(
+                self.sp.playlist,
+                self.playlist_id,
+                fields='id,name,owner'
+            )
             return bool(playlist and playlist.get('id'))
         except Exception as e:
             logger.error(f"Error verifying playlist {self.playlist_id}: {str(e)}")
             return False
 
-    
-
-    def add_similar_tracks(self, track_ids: List[str]) -> bool:
-        """Add similar tracks to the playlist."""
+    def convert_to_serializable(self, data: Any) -> Any:
+        """Convert complex data types to serializable Python types."""
         try:
-            track_uris = [f"spotify:track:{track_id}" for track_id in track_ids]
-            
-            for i in range(0, len(track_uris), 100):  
-                batch = track_uris[i:i+100]
-                self.sp.playlist_add_items(self.playlist_id, batch)
-            
-            return True
+            if isinstance(data, defaultdict):
+                return dict(data)
+            elif isinstance(data, (set, type({}.items()))):
+                return list(data)
+            elif isinstance(data, dict):
+                return {k: self.convert_to_serializable(v) for k, v in data.items()}
+            elif isinstance(data, (list, tuple)):
+                return [self.convert_to_serializable(x) for x in data]
+            elif isinstance(data, datetime):
+                return data.isoformat()
+            return data
         except Exception as e:
-            logger.error(f"Error adding similar tracks: {str(e)}")
-            raise
+            logger.error(f"Error converting to serializable: {str(e)}")
+            return str(data)
+
+    def get_playlist_info(self) -> Dict[str, Any]:
+        """Get detailed playlist information."""
+        try:
+            playlist = self._make_spotify_request(
+                self.sp.playlist,
+                self.playlist_id,
+                fields='id,name,owner,images,tracks.total,description,public,collaborative'
+            )
+            
+            return {
+                'id': playlist.get('id'),
+                'name': playlist.get('name'),
+                'owner': playlist.get('owner', {}).get('display_name'),
+                'owner_id': playlist.get('owner', {}).get('id'),
+                'image': playlist.get('images', [{}])[0].get('url') if playlist.get('images') else None,
+                'total_tracks': playlist.get('tracks', {}).get('total', 0),
+                'description': playlist.get('description'),
+                'public': playlist.get('public'),
+                'collaborative': playlist.get('collaborative')
+            }
+        except Exception as e:
+            logger.error(f"Error getting playlist info: {str(e)}")
+            raise PlaylistAnalysisError(f"Failed to get playlist info: {str(e)}")
+
+    def _reset_rate_limit_delay(self):
+        """Reset rate limit delay to base value."""
+        self.rate_limit_delay = 1
+
+    def _increase_rate_limit_delay(self):
+        """Increase rate limit delay with exponential backoff."""
+        self.rate_limit_delay = min(self.rate_limit_delay * 2, 32)  
+
+    @staticmethod
+    def format_duration(duration_ms: int) -> str:
+        """Format duration from milliseconds to readable string."""
+        try:
+            seconds = int((duration_ms / 1000) % 60)
+            minutes = int((duration_ms / (1000 * 60)) % 60)
+            hours = int(duration_ms / (1000 * 60 * 60))
+            
+            if hours > 0:
+                return f"{hours}:{minutes:02d}:{seconds:02d}"
+            return f"{minutes}:{seconds:02d}"
+        except Exception:
+            return "0:00"
+
+    def cleanup(self):
+        """Cleanup resources and reset state."""
+        try:
+            self._reset_rate_limit_delay()
+            
+        except Exception as e:
+            logger.error(f"Error during cleanup: {str(e)}")
+    
+    
+        
+    
+        
