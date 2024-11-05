@@ -36,7 +36,7 @@ class SpotifyService:
                 client_secret=self.client_secret,
                 redirect_uri=self.redirect_uri,
                 scope=self.scope,
-                cache_handler=None  # Disable caching
+                cache_handler=None  
             )
         except Exception as e:
             logger.error(f"Error creating OAuth: {str(e)}")
