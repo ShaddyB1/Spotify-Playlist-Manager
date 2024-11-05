@@ -68,10 +68,6 @@
                 </p>
 
                 <div class="flex space-x-2">
-                    <a href="{{ url_for('analyze_playlist', playlist_id=playlist.id) }}"
-                       class="flex-1 bg-green-500 text-white px-4 py-2 rounded-full text-sm text-center hover:bg-green-600 transition-colors">
-                        Analyze
-                    </a>
                     {% if playlist.owner.id == user.id %}
                     <button onclick="openPlaylistActions('{{ playlist.id }}')"
                             class="flex-1 bg-blue-500 text-white px-4 py-2 rounded-full text-sm hover:bg-blue-600 transition-colors">
