@@ -66,17 +66,17 @@ class SpotifyPlaylistManager:
     def get_audio_features_batch(self, track_ids: List[str]) -> Dict[str, float]:
         """Get audio features for multiple tracks in one request."""
         try:
-            # Split track_ids into chunks of 100 (Spotify's limit)
+         
             features_dict = {}
             for i in range(0, len(track_ids), 100):
                 batch = track_ids[i:i+100]
                 
-                # Add delay to respect rate limits
-                time.sleep(1)  # Add 1 second delay between batches
+              
+                time.sleep(1)  
                 
                 features = self.sp.audio_features(batch)
                 
-                # Process the batch results
+                
                 for track_id, feature in zip(batch, features):
                     if feature:
                         features_dict[track_id] = feature.get('energy', 0.0)
@@ -101,7 +101,7 @@ class SpotifyPlaylistManager:
         """Convert complex data types to serializable Python types."""
         if isinstance(data, defaultdict):
             return dict(data)
-        elif isinstance(data, (set, type({}.items()))):  # Fixed this line
+        elif isinstance(data, (set, type({}.items()))):  
             return list(data)
         elif isinstance(data, dict):
             return {k: self.convert_to_serializable(v) for k, v in data.items()}
@@ -119,7 +119,7 @@ class SpotifyPlaylistManager:
         try:
             logger.info(f"Starting playlist optimization with criteria: {criteria}")
             
-            # Get track analysis
+            
             analysis = self.analyze_tracks()
             
             if not analysis['track_details']:
@@ -129,12 +129,11 @@ class SpotifyPlaylistManager:
             for track in analysis['track_details']:
                 reasons = []
                 
-                # Check popularity criterion
+                
                 min_popularity = int(criteria.get('minPopularity', 30))
                 if track['popularity'] < min_popularity:
                     reasons.append(f"Low popularity ({track['popularity']}%)")
                 
-                # Check energy criterion
                 min_energy = float(criteria.get('minEnergy', 0.2))
                 if track['energy'] < min_energy:
                     reasons.append(f"Low energy ({track['energy']*100:.0f}%)")
@@ -149,12 +148,12 @@ class SpotifyPlaylistManager:
                         'reasons': reasons
                     })
             
-            # Actually remove tracks if autoRemove is True
+            
             removed_tracks = []
             if criteria.get('autoRemove'):
                 track_uris = [f"spotify:track:{track['id']}" for track in tracks_to_remove]
                 
-                # Remove tracks in batches of 100
+               
                 for i in range(0, len(track_uris), 100):
                     batch = track_uris[i:i+100]
                     try:
@@ -199,7 +198,7 @@ class SpotifyPlaylistManager:
             recent_plays = self.sp.current_user_recently_played(limit=50)
             logger.info(f"Retrieved {len(recent_plays['items'])} recent plays")
             
-            # Create lookup for recently played tracks
+            # lookup for recently played tracks
             recent_plays_lookup = {
                 item['track']['id']: {
                     'played_at': datetime.fromisoformat(item['played_at'].replace('Z', '+00:00')),
@@ -240,15 +239,15 @@ class SpotifyPlaylistManager:
                         logger.warning(f"Skipping track at index {i} - no track ID")
                         continue
                     
-                    # Check for duplicates
+                    # duplicates
                     if track_id in track_ids:
                         analysis['duplicates'].append(track.get('name', 'Unknown Track'))
                     track_ids.add(track_id)
                     
-                    # Get track audio features for energy
+                   
                     energy = self.get_energy(track_id)
                     
-                    # Build track info dictionary
+                    # track info dictionary
                     track_info = {
                         'id': track_id,
                         'name': track.get('name', 'Unknown Track'),
@@ -263,14 +262,14 @@ class SpotifyPlaylistManager:
                         'release_date': track.get('album', {}).get('release_date', '')
                     }
                     
-                    # Update distributions
+                   
                     popularity_bracket = (track_info['popularity'] // 10) * 10
                     analysis['popularity_distribution'][popularity_bracket] += 1
                     
                     for artist in track_info['artists']:
                         analysis['artist_distribution'][artist] += 1
                     
-                    # Update release decade distribution if release date is available
+                 
                     if track_info['release_date']:
                         try:
                             year = int(track_info['release_date'][:4])
@@ -287,7 +286,7 @@ class SpotifyPlaylistManager:
                         track_info['last_played'] = None
                         analysis['inactive_tracks'] += 1
                     
-                    # Update running totals
+                   
                     analysis['total_duration_ms'] += track_info['duration_ms']
                     if track_info['explicit']:
                         analysis['explicit_tracks'] += 1
@@ -319,7 +318,7 @@ class SpotifyPlaylistManager:
                     'active_percentage': 0
                 })
             
-            # Convert defaultdict to regular dict and sort distributions
+           
             final_analysis = self.convert_to_serializable(analysis)
             
             # Sort distributions by value
@@ -349,10 +348,10 @@ class SpotifyPlaylistManager:
             seed_tracks = [t['track']['id'] for t in tracks[:5] if t['track']]
             audio_features = [self.get_energy(track_id) for track_id in seed_tracks]
             
-            # Calculate average energy
+           
             avg_energy = sum(audio_features) / len(audio_features) if audio_features else 0.5
             
-            # Get recommendations
+      
             recommendations = self.sp.recommendations(
                 seed_tracks=seed_tracks[:5],
                 limit=limit,
@@ -396,7 +395,7 @@ class SpotifyPlaylistManager:
         try:
             track_uris = [f"spotify:track:{track_id}" for track_id in track_ids]
             
-            for i in range(0, len(track_uris), 100):  # Add in batches of 100
+            for i in range(0, len(track_uris), 100):  
                 batch = track_uris[i:i+100]
                 self.sp.playlist_add_items(self.playlist_id, batch)
             
