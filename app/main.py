@@ -83,10 +83,13 @@ def check_session():
 
 @app.route('/')
 def index():
-    if session.get('token_info'):
-        return redirect(url_for('dashboard'))
-    return render_template('index.html')
-
+    if 'token_info' not in session:
+        # Check if mobile
+        if request.headers.get('User-Agent', '').lower().find('mobile') > -1:
+            return render_template('mobile_index.html')
+        return render_template('index.html')
+    return redirect(url_for('dashboard'))
+    
 @app.route('/login')
 def login():
     try:
@@ -153,6 +156,12 @@ def callback():
         logger.error(f"Callback error: {str(e)}", exc_info=True)
         flash(f'Authentication failed: {str(e)}', 'error')
         return redirect(url_for('index'))
+
+@app.errorhandler(404)
+def not_found_error(error):
+    if request.headers.get('User-Agent', '').lower().find('mobile') > -1:
+        return redirect(url_for('index'))
+    return render_template('error.html', error="Page not found"), 404
         
 @app.route('/dashboard')
 @spotify_service.require_auth
