@@ -3,6 +3,9 @@
     --spotify-green: #1DB954;
     --spotify-black: #191414;
     --spotify-grey: #282828;
+    --spotify-light-grey: #b3b3b3;
+    --spotify-hover-green: #1ed760;
+    --transition-speed: 0.3s;
 }
 
 /* Custom Animations */
@@ -27,13 +30,18 @@
     50% { opacity: 0.5; }
 }
 
+@keyframes shimmer {
+    0% { background-position: -1000px 0; }
+    100% { background-position: 1000px 0; }
+}
+
 /* Loading Animations */
 .loading-spinner {
     width: 30px;
     height: 30px;
     border: 3px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
-    border-top-color: white;
+    border-top-color: var(--spotify-green);
     animation: spin 1s linear infinite;
 }
 
@@ -72,7 +80,7 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #1ed760;
+    background: var(--spotify-hover-green);
 }
 
 /* Toast Notifications */
@@ -80,13 +88,29 @@
     position: fixed;
     top: 1rem;
     right: 1rem;
-    padding: 1rem;
+    padding: 1rem 1.5rem;
     border-radius: 0.5rem;
     background: var(--spotify-grey);
     color: white;
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     animation: slideIn 0.3s ease-out;
     z-index: 1000;
+    max-width: 300px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.toast.success {
+    border-left: 4px solid var(--spotify-green);
+}
+
+.toast.error {
+    border-left: 4px solid #e74c3c;
+}
+
+.toast.warning {
+    border-left: 4px solid #f39c12;
 }
 
 @keyframes slideIn {
@@ -113,12 +137,32 @@
     animation: pulse 2s infinite;
 }
 
-/* Responsive Images */
+/* Playlist Cards */
+.playlist-card {
+    transition: all var(--transition-speed) ease;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.playlist-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 20px rgba(0, 0, 0, 0.2);
+}
+
 .playlist-image {
     width: 100%;
     aspect-ratio: 1;
     object-fit: cover;
     background: var(--spotify-grey);
+    transition: transform var(--transition-speed);
+}
+
+.playlist-card:hover .playlist-image {
+    transform: scale(1.05);
 }
 
 /* Card Hover Effects */
@@ -128,7 +172,7 @@
 
 .hover-card:hover {
     transform: translateY(-4px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
 }
 
 /* Button Styles */
@@ -139,11 +183,69 @@
     border-radius: 9999px;
     font-weight: bold;
     transition: all 0.2s;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
 }
 
 .spotify-button:hover {
-    background: #1ed760;
+    background: var(--spotify-hover-green);
     transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(29, 185, 84, 0.3);
+}
+
+.spotify-button:active {
+    transform: scale(0.98);
+}
+
+.spotify-button.secondary {
+    background: transparent;
+    border: 2px solid var(--spotify-green);
+    color: var(--spotify-green);
+}
+
+.spotify-button.secondary:hover {
+    background: rgba(29, 185, 84, 0.1);
+}
+
+/* Form Elements */
+.form-input {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    color: white;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: var(--spotify-green);
+    box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.3);
+}
+
+.form-select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 0.5rem;
+    padding: 0.75rem 2.5rem 0.75rem 1rem;
+    color: white;
+    transition: all 0.2s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1rem;
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: var(--spotify-green);
+    box-shadow: 0 0 0 2px rgba(29, 185, 84, 0.3);
 }
 
 /* Dark Mode Support */
@@ -154,11 +256,41 @@
     }
 }
 
+/* Light Mode Overrides */
+html:not(.dark) {
+    --bg-primary: #ffffff;
+    --text-primary: #121212;
+    --spotify-grey: #f0f0f0;
+}
+
+html:not(.dark) .bg-spotify-gray {
+    background-color: #f3f4f6;
+}
+
+html:not(.dark) .text-gray-400 {
+    color: #6b7280;
+}
+
+html:not(.dark) .playlist-card {
+    background-color: white;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
 /* Responsive Design */
 @media (max-width: 640px) {
     .container {
         padding-left: 1rem;
         padding-right: 1rem;
+    }
+    
+    .playlist-card {
+        margin-bottom: 1.5rem;
+    }
+    
+    .toast {
+        max-width: 90%;
+        left: 5%;
+        right: 5%;
     }
 }
 
@@ -177,4 +309,40 @@
 .focus-visible:focus {
     outline: 2px solid var(--spotify-green);
     outline-offset: 2px;
+}
+
+/* Theme Toggle Button */
+.theme-toggle {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.theme-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    backdrop-filter: blur(4px);
+}
+
+.loading-overlay p {
+    margin-top: 1rem;
+    color: white;
+    font-weight: 500;
 }
