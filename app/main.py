@@ -35,6 +35,23 @@ Session(app)
 
 spotify_service = SpotifyService()
 
+# Context processor to inject year into all templates
+@app.context_processor
+def inject_year():
+    return {'year': datetime.now().year}
+
+# Add mock current_user for templates
+@app.context_processor
+def inject_user():
+    class User:
+        @property
+        def is_authenticated(self):
+            return 'access_token' in session
+    return {'current_user': User()}
+
+# Public endpoints for browsing without authentication
+PUBLIC_ENDPOINTS = ['/', '/login', '/callback', '/public', '/browse', '/api/browse', '/api/public', '/static', '/index', '/error', '/public_playlists', '/api/category_playlists', '/api/playlists/category', '/playlist', '/api/playlist']
+
 @app.after_request
 def add_header(response):
     response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
@@ -44,8 +61,10 @@ def add_header(response):
 
 @app.before_request
 def check_session():
-    if request.path == '/':
-        return None
+    # Allow public endpoints without authentication
+    for endpoint in PUBLIC_ENDPOINTS:
+        if request.path.startswith(endpoint):
+            return None
         
     if 'token_info' in session:
         try:
@@ -77,7 +96,9 @@ def catch_all(path):
         if session.get('token_info'):
             return redirect(url_for('dashboard'))
         return render_template('index.html')
-    elif path in ['dashboard', 'login', 'callback']:
+    elif path == 'public':
+        return redirect(url_for('public_playlists'))
+    elif path in ['dashboard', 'login', 'callback', 'browse']:
         return redirect(url_for(path))
     return redirect(url_for('index'))
 
@@ -277,7 +298,7 @@ def add_similar_tracks(playlist_id):
         logger.error(f"Error adding similar tracks: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
-@app.route('/logout', methods=['POST'])
+@app.route('/logout', methods=['GET', 'POST'])
 def logout():
     try:
         if spotify_service:
@@ -343,6 +364,217 @@ def not_found_error(error):
 @app.errorhandler(500)
 def internal_error(error):
     return render_template('error.html', error="An internal error occurred"), 500
+
+@app.route('/public')
+def public_playlists():
+    """Browse public playlists without authentication"""
+    return render_template('public.html')
+
+@app.route('/api/browse/category/<category>', methods=['GET'])
+@rate_limit
+def browse_category(category):
+    """Get public playlists by category - no authentication required"""
+    try:
+        # Use guest token for public access
+        token = spotify_service.get_guest_token()
+        if not token:
+            return jsonify({'error': 'Unable to access Spotify API'}), 500
+        
+        manager = SpotifyPlaylistManager(token)
+        results = manager.get_category_playlists(category)
+        
+        if not results:
+            return jsonify({'playlists': []}), 200
+            
+        playlists = []
+        for item in results:
+            playlists.append({
+                'id': item['id'],
+                'name': item['name'],
+                'image': item['images'][0]['url'] if item['images'] else None,
+                'tracks': item['tracks']['total'],
+                'owner': item['owner']['display_name']
+            })
+            
+        return jsonify({'playlists': playlists}), 200
+    except Exception as e:
+        logger.error(f"Error fetching category playlists: {str(e)}")
+        return jsonify({'error': 'Failed to load playlists'}), 500
+
+@app.route('/api/playlists/category/<category>', methods=['GET'])
+@rate_limit
+def get_category_playlists(category):
+    """Get playlists by category for the public page"""
+    try:
+        # Use guest token for public access
+        token = spotify_service.get_guest_token()
+        if not token:
+            return jsonify({'error': 'Unable to access Spotify API'}), 500
+        
+        manager = SpotifyPlaylistManager(token)
+        results = manager.get_category_playlists(category)
+        
+        if not results:
+            return jsonify([]), 200
+            
+        playlists = []
+        for item in results:
+            playlists.append({
+                'id': item['id'],
+                'name': item['name'],
+                'image_url': item['images'][0]['url'] if item['images'] else None,
+                'tracks': item['tracks']['total'],
+                'owner': item['owner']['display_name'],
+                'description': item.get('description', '')
+            })
+            
+        return jsonify(playlists), 200
+    except Exception as e:
+        logger.error(f"Error fetching category playlists: {str(e)}")
+        return jsonify({'error': 'Failed to load playlists'}), 500
+
+@app.route('/api/playlist/<playlist_id>/follow', methods=['POST'])
+@spotify_service.require_auth
+@rate_limit
+def follow_playlist(playlist_id):
+    """Follow a public playlist"""
+    try:
+        token_info = session.get('token_info')
+        manager = SpotifyPlaylistManager(token_info)
+        
+        success = manager.follow_playlist(playlist_id)
+        if success:
+            return jsonify({'message': 'Playlist followed successfully'}), 200
+        else:
+            return jsonify({'error': 'Failed to follow playlist'}), 400
+    except Exception as e:
+        logger.error(f"Error following playlist: {str(e)}")
+        return jsonify({'error': 'Failed to follow playlist'}), 500
+
+@app.route('/browse')
+def browse_page():
+    """Browse page for discovering playlists"""
+    return render_template('browse.html')
+
+@app.route('/playlist/<playlist_id>')
+def view_playlist(playlist_id):
+    """View a single playlist"""
+    return render_template('playlist.html', playlist_id=playlist_id)
+
+@app.route('/api/playlist/<playlist_id>', methods=['GET'])
+@rate_limit
+def get_playlist_details(playlist_id):
+    """Get details for a specific playlist"""
+    try:
+        # Use guest token for public access
+        token = spotify_service.get_guest_token()
+        if not token:
+            return jsonify({'error': 'Unable to access Spotify API'}), 500
+        
+        manager = SpotifyPlaylistManager(token)
+        
+        # Get playlist details from Spotify
+        playlist = manager.sp.playlist(playlist_id, fields='id,name,description,images,owner,followers,tracks.total')
+        
+        if not playlist:
+            return jsonify({'error': 'Playlist not found'}), 404
+            
+        # Format response
+        response = {
+            'id': playlist['id'],
+            'name': playlist['name'],
+            'description': playlist.get('description', ''),
+            'image_url': playlist['images'][0]['url'] if playlist['images'] else None,
+            'owner': playlist['owner']['display_name'],
+            'owner_id': playlist['owner']['id'],
+            'tracks': playlist['tracks']['total'],
+            'followers': playlist.get('followers', {}).get('total', 0)
+        }
+            
+        return jsonify(response), 200
+    except Exception as e:
+        logger.error(f"Error fetching playlist details: {str(e)}")
+        return jsonify({'error': 'Failed to load playlist details'}), 500
+
+@app.route('/api/playlist/<playlist_id>/tracks', methods=['GET'])
+@rate_limit
+def get_playlist_tracks(playlist_id):
+    """Get tracks for a specific playlist"""
+    try:
+        # Use guest token for public access
+        token = spotify_service.get_guest_token()
+        if not token:
+            return jsonify({'error': 'Unable to access Spotify API'}), 500
+        
+        manager = SpotifyPlaylistManager(token)
+        
+        # Get playlist tracks from Spotify
+        results = manager.sp.playlist_tracks(
+            playlist_id, 
+            fields='items(track(id,name,artists(name),album(name,images),duration_ms,preview_url))'
+        )
+        
+        if not results or 'items' not in results:
+            return jsonify([]), 200
+            
+        # Format response
+        tracks = []
+        for item in results['items']:
+            if not item.get('track'):
+                continue
+                
+            track = item['track']
+            tracks.append({
+                'id': track['id'],
+                'name': track['name'],
+                'artists': [artist['name'] for artist in track['artists']],
+                'album': track['album']['name'],
+                'album_image': track['album']['images'][0]['url'] if track['album']['images'] else None,
+                'duration_ms': track['duration_ms'],
+                'preview_url': track.get('preview_url')
+            })
+            
+        return jsonify(tracks), 200
+    except Exception as e:
+        logger.error(f"Error fetching playlist tracks: {str(e)}")
+        return jsonify({'error': 'Failed to load playlist tracks'}), 500
+
+# Test endpoint to check Spotify API
+@app.route('/api/test')
+def test_spotify_api():
+    try:
+        # Test SpotifyService
+        service = SpotifyService()
+        client_id = service.client_id[:5] + '...' if service.client_id else None
+        client_secret = service.client_secret[:5] + '...' if service.client_secret else None
+        
+        # Test guest token
+        token = None
+        token_error = None
+        try:
+            token = service.get_guest_token()
+        except Exception as e:
+            token_error = str(e)
+        
+        # Test direct guest token
+        direct_token = None
+        direct_token_error = None
+        try:
+            direct_token = service.get_guest_token_direct()
+        except Exception as e:
+            direct_token_error = str(e)
+        
+        return jsonify({
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'token': 'Success' if token else 'Failed',
+            'token_error': token_error,
+            'direct_token': 'Success' if direct_token else 'Failed',
+            'direct_token_error': direct_token_error
+        })
+    except Exception as e:
+        logger.error(f"Error in test endpoint: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 def create_app():
     return app

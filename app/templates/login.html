@@ -6,55 +6,43 @@
 {% endblock %}
 
 {% block content %}
-<!-- Theme Toggle Button -->
-<button id="themeToggle" 
-        class="fixed top-4 right-4 z-50 bg-gray-800 dark:bg-gray-200 p-2 rounded-full shadow-lg transition-colors duration-200"
-        aria-label="Toggle theme">
-    <svg id="darkIcon" class="w-6 h-6 text-gray-200 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-    </svg>
-    <svg id="lightIcon" class="w-6 h-6 text-gray-800" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"/>
-    </svg>
-</button>
-
 <!-- Skip to main content link for accessibility -->
 <a href="#main-content" 
    class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-green-500 text-white px-4 py-2 rounded-md">
     Skip to main content
 </a>
-<div class="min-h-screen bg-gradient-to-b from-gray-100 to-white dark:from-spotify-black dark:to-green-900 relative overflow-hidden transition-colors duration-300">
+
+<div class="min-h-screen bg-gradient-to-br from-spotify-black via-gray-900 to-green-900 relative overflow-hidden">
     <!-- Animated Background Elements -->
     <div class="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-        <div class="absolute w-96 h-96 bg-green-500 rounded-full filter blur-3xl opacity-20 animate-float parallax" 
-             data-speed="-0.3" style="top: 10%; left: -10%;"></div>
-        <div class="absolute w-96 h-96 bg-blue-500 rounded-full filter blur-3xl opacity-20 animate-float-delayed parallax" 
-             data-speed="0.2" style="top: 50%; right: -10%;"></div>
-        <div class="absolute w-96 h-96 bg-purple-500 rounded-full filter blur-3xl opacity-20 animate-float-reverse parallax" 
-             data-speed="0.1" style="bottom: -10%; left: 50%;"></div>
+        <div class="absolute w-96 h-96 bg-green-500 rounded-full filter blur-3xl opacity-10 animate-float" 
+             style="top: 10%; left: -10%;"></div>
+        <div class="absolute w-96 h-96 bg-blue-500 rounded-full filter blur-3xl opacity-10 animate-float-delayed" 
+             style="top: 50%; right: -10%;"></div>
+        <div class="absolute w-96 h-96 bg-purple-500 rounded-full filter blur-3xl opacity-10 animate-float-reverse" 
+             style="bottom: -10%; left: 50%;"></div>
+        <div class="absolute inset-0 bg-[url('/static/images/wave-pattern.svg')] opacity-5 bg-repeat"></div>
     </div>
     
-    <div id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16 relative z-10">
+    <div id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-20 relative z-10">
         <!-- Hero Section -->
         <div class="text-center" data-aos="fade-up" data-aos-duration="1000">
             <div class="inline-block" data-aos="fade-down" data-aos-delay="200">
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500 bg-opacity-20 text-green-300 dark:text-green-400 mb-4">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500 bg-opacity-20 text-green-300 mb-4">
                     <span class="w-2 h-2 bg-green-400 rounded-full mr-2 animate-pulse"></span>
-                    <span class="sr-only">Status:</span> Powered by Spotify API
+                    Powered by Spotify API
                 </span>
             </div>
-            <h1 class="text-5xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6 tracking-tight"
+            <h1 class="text-5xl md:text-6xl font-bold text-white mb-6 tracking-tight"
                 data-aos="fade-up" data-aos-delay="300">
                 Optimize Your Spotify Experience
             </h1>
-            <p class="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto mb-12"
+            <p class="text-xl text-gray-300 max-w-2xl mx-auto mb-12"
                data-aos="fade-up" data-aos-delay="400">
                 Smart playlist management powered by your listening habits and advanced analytics.
             </p>
             <a href="{{ url_for('login') }}" 
-               class="login-button inline-flex items-center bg-green-500 text-white px-8 py-4 rounded-full font-bold hover:bg-green-600 transition-all transform hover:scale-105 duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+               class="spotify-button text-lg py-4 px-10 inline-flex items-center shadow-lg transform hover:scale-105 duration-200"
                data-aos="fade-up" data-aos-delay="500"
                role="button"
                aria-label="Login with Spotify">
@@ -62,12 +50,9 @@
                     <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
                 </svg>
                 <span>Login with Spotify</span>
-                <span class="login-text ml-2 group-hover:translate-x-1 transition-transform">→</span>
-                <div class="loading-spinner ml-2 hidden">
-                    <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                </div>
             </a>
         </div>
+        
         <!-- Interactive Feature Cards -->
         <div class="grid md:grid-cols-3 gap-8 mt-20">
             {% for feature in [

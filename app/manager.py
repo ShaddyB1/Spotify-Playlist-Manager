@@ -9,6 +9,7 @@ from collections import defaultdict
 from typing import Any
 import time
 from requests.exceptions import RequestException
+from spotipy.exceptions import SpotifyException
 
 logging.basicConfig(
     level=logging.INFO,
@@ -33,15 +34,68 @@ class SpotifyPlaylistManager:
             "playlist-modify-public playlist-modify-private "
             "user-library-read user-read-recently-played "
             "user-read-playback-state playlist-read-private "
-            "user-top-read"
+            "user-top-read user-read-email "
+            "user-read-private user-follow-read user-follow-modify "
+            "playlist-read-collaborative "
+            "user-read-currently-playing user-read-playback-position "
+            "streaming app-remote-control "
+            "user-library-modify"
         )
         self.rate_limit_delay = 1
         
+        # Map common category names to Spotify category IDs
+        self.category_id_map = {
+            'pop': 'pop',
+            'rock': 'rock',
+            'hip hop': 'hiphop',
+            'hip-hop': 'hiphop',
+            'r&b': 'rnb',
+            'indie': 'indie_alt',
+            'indie rock': 'indie_alt',
+            'alternative': 'indie_alt',
+            'electronic': 'edm_dance',
+            'dance': 'edm_dance',
+            'edm': 'edm_dance',
+            'jazz': 'jazz',
+            'classical': 'classical',
+            'country': 'country',
+            'folk': 'folk_americana',
+            'americana': 'folk_americana',
+            'metal': 'metal',
+            'blues': 'blues',
+            'soul': 'soul',
+            'reggae': 'reggae',
+            'punk': 'punk',
+            'funk': 'funk',
+            'latin': 'latin',
+            'world': 'world',
+            'ambient': 'chill',
+            'chill': 'chill'
+        }
+        
         try:
+            # Get credentials from environment
+            client_id = os.getenv('SPOTIFY_CLIENT_ID')
+            client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+            redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI')
+            
+            # Validate credentials
+            if not client_id or not client_secret or not redirect_uri:
+                missing = []
+                if not client_id: missing.append('SPOTIFY_CLIENT_ID')
+                if not client_secret: missing.append('SPOTIFY_CLIENT_SECRET')
+                if not redirect_uri: missing.append('SPOTIFY_REDIRECT_URI')
+                error_msg = f"Missing required Spotify credentials: {', '.join(missing)}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+            
+            # Log credential info (without revealing secrets)
+            logger.info(f"Using Spotify credentials - Client ID: {client_id[:5]}... Redirect URI: {redirect_uri}")
+            
             auth_manager = SpotifyOAuth(
-                client_id=os.getenv('SPOTIFY_CLIENT_ID'),
-                client_secret=os.getenv('SPOTIFY_CLIENT_SECRET'),
-                redirect_uri=os.getenv('SPOTIFY_REDIRECT_URI'),
+                client_id=client_id,
+                client_secret=client_secret,
+                redirect_uri=redirect_uri,
                 scope=self.scope,
                 cache_handler=None
             )
@@ -54,6 +108,10 @@ class SpotifyPlaylistManager:
             )
             self.playlist_id = playlist_id
             logger.info(f"Successfully initialized SpotifyPlaylistManager for playlist: {playlist_id}")
+            
+            # Verify credentials by making a simple API call
+            self._verify_credentials()
+            
         except Exception as e:
             logger.error(f"Failed to initialize Spotify client: {str(e)}")
             raise
@@ -69,8 +127,6 @@ class SpotifyPlaylistManager:
         logger.warning(f"Rate limit hit, waiting {delay} seconds")
         time.sleep(delay)
 
-
-
     def _make_spotify_request(self, func, *args, **kwargs):
         """Make a Spotify API request with retry logic and rate limiting."""
         max_retries = 3
@@ -78,12 +134,51 @@ class SpotifyPlaylistManager:
 
         while retry_count < max_retries:
             try:
-                return func(*args, **kwargs)
+                logger.info(f"Making Spotify API request: {func.__name__} (attempt {retry_count + 1}/{max_retries})")
+                result = func(*args, **kwargs)
+                logger.info(f"Spotify API request successful: {func.__name__}")
+                return result
             except Exception as e:
-                if 'status: 429' in str(e) and retry_count < max_retries - 1:
+                error_str = str(e)
+                logger.warning(f"Spotify API error: {error_str}")
+                
+                # Handle rate limiting
+                if 'status: 429' in error_str and retry_count < max_retries - 1:
                     self._handle_rate_limit(e)
                     retry_count += 1
                     continue
+                
+                # Handle authentication errors
+                if 'status: 401' in error_str or 'invalid_client' in error_str:
+                    logger.error(f"Authentication error in {func.__name__}: {error_str}. Check your Spotify API credentials.")
+                    # Try to refresh the token
+                    try:
+                        if hasattr(self.sp, 'auth_manager') and hasattr(self.sp.auth_manager, 'refresh_access_token'):
+                            logger.info("Attempting to refresh access token...")
+                            self.sp.auth_manager.refresh_access_token()
+                            retry_count += 1
+                            time.sleep(1)  # Wait a bit before retrying
+                            continue
+                    except Exception as refresh_error:
+                        logger.error(f"Failed to refresh token: {refresh_error}")
+                
+                # Handle permission errors
+                if 'status: 403' in error_str:
+                    logger.error(f"Permission denied for {func.__name__}: {error_str}")
+                    logger.error(f"Request details - Function: {func.__name__}, Args: {args}, Kwargs: {kwargs}")
+                    logger.error("This is likely due to missing scopes. Check if your app has the required scopes in the Spotify Developer Dashboard.")
+                    logger.error(f"Current scopes: {self.scope}")
+                    
+                    if retry_count < max_retries - 1:
+                        wait_time = 2 * (retry_count + 1)  # Exponential backoff
+                        logger.info(f"Retrying in {wait_time} seconds...")
+                        time.sleep(wait_time)
+                        retry_count += 1
+                        continue
+                
+                # If we've reached max retries or it's not a retryable error
+                if retry_count >= max_retries - 1:
+                    logger.error(f"Max retries reached for Spotify API request: {func.__name__}")
                 raise e
 
     def get_playlist_tracks(self) -> List[Dict]:
@@ -113,43 +208,134 @@ class SpotifyPlaylistManager:
 
     def get_audio_features_batch(self, track_ids: List[str]) -> Dict[str, float]:
         """Get audio features for multiple tracks in one request."""
+        if not track_ids:
+            logger.warning("No track IDs provided for audio features")
+            return {}
+            
         try:
             features_dict = {}
-            batch_size = 25  
+            batch_size = 10  # Reduced from 15 to be even safer with API limits
+            
+            logger.info(f"Getting audio features for {len(track_ids)} tracks in batches of {batch_size}")
             
             for i in range(0, len(track_ids), batch_size):
                 batch = track_ids[i:i+batch_size]
+                batch_ids_str = ','.join(batch[:5]) + '...' if len(batch) > 5 else ','.join(batch)
                 
                 try:
-                   
-                    time.sleep(1)
+                    # Add more delay to avoid rate limiting
+                    time.sleep(4)  # Increased from 3 to 4 seconds
                     
-                    features = self.sp.audio_features(batch)
+                    logger.info(f"Requesting audio features for batch {i//batch_size + 1} of {(len(track_ids) + batch_size - 1)//batch_size} ({len(batch)} tracks, IDs: {batch_ids_str})")
+                    
+                    # Try to use the audio_features endpoint first
+                    got_batch_features = False
+                    features = []
+                    
+                    try:
+                        if hasattr(self.sp, 'audio_features'):
+                            features = self._make_spotify_request(
+                                self.sp.audio_features,
+                                batch
+                            )
+                            
+                            # Log the response structure for debugging
+                            if features:
+                                logger.info(f"Audio features response type: {type(features)}, length: {len(features) if isinstance(features, list) else 'not a list'}")
+                                got_batch_features = True
+                            else:
+                                logger.warning(f"Empty response from audio_features for batch {i//batch_size + 1}")
+                    except Exception as batch_error:
+                        logger.warning(f"Batch audio_features request failed: {str(batch_error)}")
+                        
+                    # If batch request failed or returned empty, use fallback methods
+                    if not got_batch_features or not features:
+                        logger.info("Using fallback methods to get audio features")
+                        features = []
+                        
+                        for track_id in batch:
+                            try:
+                                # First try individual audio_features call
+                                try:
+                                    time.sleep(1)
+                                    logger.info(f"Trying individual audio_features call for track {track_id}")
+                                    feature = self._make_spotify_request(
+                                        self.sp.audio_features,
+                                        [track_id]
+                                    )
+                                    if feature and len(feature) > 0 and feature[0]:
+                                        features.append(feature[0])
+                                        continue
+                                except Exception as e:
+                                    logger.warning(f"Individual audio_features call failed for {track_id}: {str(e)}")
+                                
+                                # If that fails, use our fallback method that uses the tracks API
+                                logger.info(f"Using track info fallback for {track_id}")
+                                fallback_feature = self._get_track_info_fallback(track_id)
+                                features.append(fallback_feature)
+                                
+                            except Exception as e:
+                                logger.error(f"All fallback methods failed for track {track_id}: {str(e)}")
+                                features.append(None)
+                    
                     if features:
+                        valid_features = [f for f in features if f]
+                        logger.info(f"Successfully retrieved audio features for {len(valid_features)}/{len(batch)} tracks")
+                        
                         for track_id, feature in zip(batch, features):
                             if feature:
-                                features_dict[track_id] = feature.get('energy', 0.0)
+                                # Store all audio features, not just energy
+                                features_dict[track_id] = {
+                                    'energy': feature.get('energy', 0.5),
+                                    'danceability': feature.get('danceability', 0.5),
+                                    'valence': feature.get('valence', 0.5),
+                                    'tempo': feature.get('tempo', 120.0),
+                                    'acousticness': feature.get('acousticness', 0.5),
+                                    'instrumentalness': feature.get('instrumentalness', 0.0)
+                                }
+                                logger.debug(f"Audio features for track {track_id}: energy={feature.get('energy', 0.5):.2f}, danceability={feature.get('danceability', 0.5):.2f}")
                             else:
-                                features_dict[track_id] = 0.0
+                                logger.warning(f"No features returned for track {track_id}")
+                                features_dict[track_id] = {
+                                    'energy': 0.5,
+                                    'danceability': 0.5,
+                                    'valence': 0.5,
+                                    'tempo': 120.0,
+                                    'acousticness': 0.5,
+                                    'instrumentalness': 0.0
+                                }
                                 
                 except Exception as e:
-                    logger.error(f"Error processing batch: {str(e)}")
+                    logger.error(f"Error processing batch {i//batch_size + 1}: {str(e)}", exc_info=True)
+                    # Still provide default values for tracks in this batch
                     for track_id in batch:
-                        features_dict[track_id] = 0.0
+                        features_dict[track_id] = {
+                            'energy': 0.5,
+                            'danceability': 0.5,
+                            'valence': 0.5,
+                            'tempo': 120.0,
+                            'acousticness': 0.5,
+                            'instrumentalness': 0.0
+                        }
                         
+            logger.info(f"Completed audio features retrieval for {len(features_dict)}/{len(track_ids)} tracks")
             return features_dict
         except Exception as e:
-            logger.error(f"Error getting audio features for batch: {str(e)}")
-            return {track_id: 0.0 for track_id in track_ids}
+            logger.error(f"Error getting audio features for batch: {str(e)}", exc_info=True)
+            # Return empty dict as fallback
+            return {}
 
     def get_energy(self, track_id: str) -> float:
-        """Get energy level for a single track."""
-        if not track_id:
-            return 0.0
-            
+        """Get energy value for a track."""
         try:
             features = self.get_audio_features_batch([track_id])
-            return features.get(track_id, 0.0)
+            if track_id in features:
+                # Check if features is a dictionary with energy key or a nested dictionary
+                if isinstance(features[track_id], dict) and 'energy' in features[track_id]:
+                    return features[track_id]['energy']
+                elif isinstance(features[track_id], (int, float)):
+                    return float(features[track_id])
+            return 0.0
         except Exception as e:
             logger.error(f"Error getting energy for track {track_id}: {str(e)}")
             return 0.0
@@ -208,21 +394,27 @@ class SpotifyPlaylistManager:
 
             track_ids = [track['track']['id'] for track in tracks if track.get('track', {}).get('id')]
             
-            
             all_audio_features = {}
-            for i in range(0, len(track_ids), 50):
-                batch_ids = track_ids[i:i+50]
+            for i in range(0, len(track_ids), 25):
+                batch_ids = track_ids[i:i+25]
                 try:
-                    batch_features = self._make_spotify_request(
-                        self.sp.audio_features,
-                        batch_ids
-                    )
-                    for track_id, features in zip(batch_ids, batch_features):
-                        if features:
-                            all_audio_features[track_id] = features
+                    logger.info(f"Getting audio features for analysis batch {i//25 + 1}/{(len(track_ids) + 24)//25}")
+                    # Use our improved audio features batch method
+                    batch_features = self.get_audio_features_batch(batch_ids)
+                    all_audio_features.update(batch_features)
                 except Exception as e:
                     logger.error(f"Error getting audio features batch: {e}")
-                    time.sleep(2)  
+                    # Add default values for tracks in this batch
+                    for track_id in batch_ids:
+                        all_audio_features[track_id] = {
+                            'energy': 0.5,
+                            'danceability': 0.5,
+                            'valence': 0.5,
+                            'tempo': 120.0,
+                            'acousticness': 0.5,
+                            'instrumentalness': 0.0
+                        }
+                time.sleep(2)
 
             seen_track_ids = set()
             
@@ -430,7 +622,7 @@ class SpotifyPlaylistManager:
             raise PlaylistAnalysisError(f"Failed to optimize playlist: {str(e)}")
 
     def get_similar_tracks(self, limit: int = 20) -> List[Dict]:
-        """Get similar tracks based on playlist tracks."""
+        """Get similar tracks based on playlist tracks and audio features."""
         try:
             logger.info(f"Starting to get similar tracks for playlist: {self.playlist_id}")
             
@@ -442,17 +634,50 @@ class SpotifyPlaylistManager:
                 logger.warning("No tracks found in playlist")
                 return []
     
-            # Get seed tracks
+            # Get audio features for all tracks to make better selections
+            track_ids = [track['track']['id'] for track in tracks if track.get('track', {}).get('id')]
+            if not track_ids:
+                logger.warning("No valid track IDs found in playlist")
+                return []
+                
+            try:
+                features = self.get_audio_features_batch(track_ids)
+                logger.info(f"Retrieved audio features for {len(features)} tracks")
+            except Exception as e:
+                logger.error(f"Error getting audio features: {e}", exc_info=True)
+                features = {}
+            
+            # Select diverse seed tracks based on audio features if available
             seed_tracks = []
-            for track in tracks[:10]:  # Look at first 10 tracks
-                try:
-                    if track and track.get('track') and track['track'].get('id'):
-                        seed_tracks.append(track['track']['id'])
-                        if len(seed_tracks) >= 5:
-                            break
-                except Exception as e:
-                    logger.error(f"Error processing potential seed track: {e}")
-                    continue
+            
+            # If we have features, try to select diverse tracks
+            if features and len(features) > 5:
+                # Sort tracks by energy to get a range
+                energy_sorted = sorted(
+                    [(tid, features[tid]['energy'] if isinstance(features[tid], dict) else 0.0) 
+                     for tid in features],
+                    key=lambda x: x[1]
+                )
+                
+                # Get tracks from different energy levels
+                if len(energy_sorted) >= 5:
+                    indices = [0, len(energy_sorted)//4, len(energy_sorted)//2, 
+                              3*len(energy_sorted)//4, len(energy_sorted)-1]
+                    seed_tracks = [energy_sorted[i][0] for i in indices]
+                    logger.info(f"Selected diverse seed tracks based on energy: {seed_tracks}")
+            
+            # If we couldn't select diverse tracks, fall back to the first 5 tracks
+            if len(seed_tracks) < 5:
+                for track in tracks:
+                    try:
+                        if track and track.get('track') and track['track'].get('id'):
+                            if track['track']['id'] not in seed_tracks:
+                                seed_tracks.append(track['track']['id'])
+                                if len(seed_tracks) >= 5:
+                                    break
+                    except Exception as e:
+                        logger.error(f"Error processing potential seed track: {e}")
+                        continue
     
             logger.info(f"Selected {len(seed_tracks)} seed tracks: {seed_tracks}")
     
@@ -460,13 +685,33 @@ class SpotifyPlaylistManager:
                 logger.error("No valid seed tracks found")
                 return []
     
-            # Get recommendations
+            # Get recommendations with more parameters for better results
             try:
                 logger.info("Requesting recommendations from Spotify")
-                recommendations = self.sp.recommendations(
-                    seed_tracks=seed_tracks[:5],
-                    limit=limit,
-                    min_popularity=30
+                
+                # Calculate average audio features to use as targets
+                avg_features = {}
+                if features:
+                    feature_keys = ['energy', 'danceability', 'valence', 'acousticness']
+                    for key in feature_keys:
+                        values = []
+                        for tid in features:
+                            if isinstance(features[tid], dict) and key in features[tid]:
+                                values.append(features[tid][key])
+                        if values:
+                            avg_features[f'target_{key}'] = sum(values) / len(values)
+                
+                # Add the average features to the recommendation request
+                recommendation_params = {
+                    'seed_tracks': seed_tracks[:5],
+                    'limit': min(limit * 2, 100),  # Request more tracks to filter later
+                    'min_popularity': 30
+                }
+                recommendation_params.update(avg_features)
+                
+                recommendations = self._make_spotify_request(
+                    self.sp.recommendations,
+                    **recommendation_params
                 )
                 
                 logger.info(f"Got recommendations response: {recommendations.keys() if recommendations else 'None'}")
@@ -487,23 +732,27 @@ class SpotifyPlaylistManager:
                     if track['id'] not in existing_ids:
                         similar_tracks.append({
                             'id': track['id'],
-                            'name': track.get('name', 'Unknown Track'),
-                            'artist': track['artists'][0]['name'] if track.get('artists') else 'Unknown Artist',
-                            'popularity': track.get('popularity', 0),
-                            'preview_url': track.get('preview_url'),
-                            'image': (track.get('album', {}).get('images', [{}])[0].get('url')
-                                    if track.get('album', {}).get('images') else None)
+                            'name': track['name'],
+                            'artist': track['artists'][0]['name'] if track['artists'] else 'Unknown',
+                            'album': track['album']['name'] if track.get('album') else 'Unknown',
+                            'image': track['album']['images'][0]['url'] if track.get('album', {}).get('images') and track['album']['images'] else None,
+                            'uri': track['uri'],
+                            'popularity': track.get('popularity', 0)
                         })
                 except Exception as e:
-                    logger.error(f"Error processing recommendation: {e}")
+                    logger.error(f"Error processing recommendation track: {e}")
                     continue
+            
+            # Sort by popularity and limit to requested number
+            similar_tracks.sort(key=lambda x: x.get('popularity', 0), reverse=True)
+            similar_tracks = similar_tracks[:limit]
     
-            logger.info(f"Returning {len(similar_tracks)} similar tracks")
+            logger.info(f"Found {len(similar_tracks)} similar tracks that are not already in the playlist")
             return similar_tracks
-    
+            
         except Exception as e:
-            logger.error(f"Error in get_similar_tracks: {e}", exc_info=True)
-            raise
+            logger.error(f"Error getting similar tracks: {e}", exc_info=True)
+            return []
 
 
     def add_similar_tracks(self, track_ids: List[str]) -> bool:
@@ -617,6 +866,111 @@ class SpotifyPlaylistManager:
             
         except Exception as e:
             logger.error(f"Error during cleanup: {str(e)}")
+    
+    def get_category_playlists(self, category, limit=20):
+        """Get playlists from a specific category."""
+        try:
+            # Map common category names to Spotify category IDs
+            category_id = self.category_id_map.get(category.lower(), category.lower())
+            
+            # Get category playlists
+            results = self.sp.category_playlists(category_id=category_id, limit=limit)
+            
+            if not results or 'playlists' not in results or 'items' not in results['playlists']:
+                logger.warning(f"No playlists found for category: {category}")
+                return []
+                
+            return results['playlists']['items']
+        except SpotifyException as e:
+            logger.error(f"Spotify error getting category playlists: {str(e)}")
+            # Try search as fallback
+            return self.search_playlists(category, limit)
+        except Exception as e:
+            logger.error(f"Error getting category playlists: {str(e)}")
+            return []
+            
+    def search_playlists(self, query, limit=20):
+        """Search for playlists by query."""
+        try:
+            results = self.sp.search(q=query, type='playlist', limit=limit)
+            
+            if not results or 'playlists' not in results or 'items' not in results['playlists']:
+                return []
+                
+            return results['playlists']['items']
+        except Exception as e:
+            logger.error(f"Error searching playlists: {str(e)}")
+            return []
+            
+    def follow_playlist(self, playlist_id):
+        """Follow a playlist."""
+        try:
+            self.sp.current_user_follow_playlist(playlist_id=playlist_id)
+            return True
+        except Exception as e:
+            logger.error(f"Error following playlist: {str(e)}")
+            return False
+            
+    def unfollow_playlist(self, playlist_id):
+        """Unfollow a playlist."""
+        try:
+            self.sp.current_user_unfollow_playlist(playlist_id=playlist_id)
+            return True
+        except Exception as e:
+            logger.error(f"Error unfollowing playlist: {str(e)}")
+            return False
+    
+    def _verify_credentials(self):
+        """Verify Spotify credentials by making a simple API call."""
+        try:
+            # Try to get current user info as a simple test
+            user_info = self._make_spotify_request(self.sp.current_user)
+            if user_info and 'id' in user_info:
+                logger.info(f"Successfully verified Spotify credentials for user: {user_info['id']}")
+            else:
+                logger.warning("Spotify credentials verification returned unexpected response")
+        except Exception as e:
+            logger.error(f"Failed to verify Spotify credentials: {str(e)}")
+            # Don't raise the exception, just log it
+    
+    def _get_track_info_fallback(self, track_id: str) -> Dict:
+        """Fallback method to get basic track information when audio_features fails.
+        Uses the tracks API which has better permission access."""
+        try:
+            logger.info(f"Using fallback method to get track info for {track_id}")
+            track_info = self._make_spotify_request(
+                self.sp.track,
+                track_id
+            )
+            
+            # Create a simplified audio features object with default values
+            # but include any information we can get from the track object
+            fallback_features = {
+                'energy': 0.5,  # Default mid-level values
+                'danceability': 0.5,
+                'valence': 0.5,
+                'tempo': 120.0,
+                'acousticness': 0.5,
+                'instrumentalness': 0.0,
+                'popularity': track_info.get('popularity', 50) / 100.0,  # Normalize to 0-1 range
+                'duration_ms': track_info.get('duration_ms', 0),
+                'name': track_info.get('name', 'Unknown'),
+                'artists': [artist['name'] for artist in track_info.get('artists', [])]
+            }
+            
+            logger.info(f"Successfully retrieved fallback track info for {track_id}")
+            return fallback_features
+        except Exception as e:
+            logger.error(f"Error getting fallback track info for {track_id}: {str(e)}")
+            # Return empty default values
+            return {
+                'energy': 0.5,
+                'danceability': 0.5,
+                'valence': 0.5,
+                'tempo': 120.0,
+                'acousticness': 0.5,
+                'instrumentalness': 0.0
+            }
     
     
         

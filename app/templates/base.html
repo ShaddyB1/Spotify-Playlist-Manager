@@ -12,22 +12,32 @@
     <title>Spotify Playlist Manager</title>
     
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
             theme: {
+                fontFamily: {
+                    'sans': ['Inter', 'sans-serif'],
+                },
                 extend: {
                     colors: {
                         'spotify-green': '#1DB954',
-                        'spotify-black': '#191414',
-                        'spotify-gray': '#282828'
+                        'spotify-black': '#121212',
+                        'spotify-gray': '#181818',
+                        'spotify-light-gray': '#282828',
+                        'spotify-white': '#FFFFFF',
+                        'spotify-accent': '#1ED760'
                     },
                     animation: {
                         'fade-in': 'fadeIn 0.5s ease-out',
                         'slide-up': 'slideUp 0.5s ease-out',
                         'pulse': 'pulse 2s infinite'
+                    },
+                    boxShadow: {
+                        'spotify': '0 8px 24px rgba(0, 0, 0, 0.5)',
                     }
                 }
             }
@@ -40,10 +50,14 @@
         }
 
         html:not(.dark) {
-            background-color: white;
-            color: #1a1a1a;
+            background-color: #f8f9fa;
+            color: #121212;
         }
         html:not(.dark) .bg-spotify-gray {
+            background-color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        html:not(.dark) .bg-spotify-light-gray {
             background-color: #f3f4f6;
         }
         html:not(.dark) .text-gray-400 {
@@ -58,6 +72,33 @@
         @keyframes loading {
             0% { background-position: 200% 0; }
             100% { background-position: -200% 0; }
+        }
+
+        .glass-effect {
+            background: rgba(24, 24, 24, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .spotify-button {
+            background: linear-gradient(135deg, #1DB954, #1ED760);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            box-shadow: 0 4px 12px rgba(29, 185, 84, 0.3);
+        }
+
+        .spotify-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(29, 185, 84, 0.4);
         }
 
         @media (max-width: 640px) {
@@ -154,49 +195,58 @@
     </style>
     {% block head %}{% endblock %}
 </head>
-<body class="bg-spotify-black text-white theme-transition min-h-screen flex flex-col">
+<body class="bg-spotify-black text-white theme-transition min-h-screen flex flex-col font-sans">
     <!-- Navigation -->
-    <nav class="bg-spotify-gray shadow-md">
+    <nav class="bg-spotify-gray shadow-spotify sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex items-center">
-                    <a href="{{ url_for('index') }}" class="flex items-center">
-                        <svg class="h-8 w-8 text-spotify-green" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.65 14.65c-.2.2-.51.2-.71 0-1.79-1.77-4.39-2.15-6.79-1.44-.33.09-.66-.12-.75-.44-.09-.33.12-.66.44-.75 2.82-.82 5.82-.39 7.95 1.33.2.2.2.51 0 .71zm1.23-2.75c-.25.25-.65.25-.9 0-2.05-2.05-5.18-2.65-7.6-1.44-.31.15-.68.02-.83-.29-.15-.31-.02-.68.29-.83 2.77-1.35 6.26-.69 8.61 1.65.25.25.25.65 0 .9zm.11-2.78c-.24.24-.64.24-.88 0-2.39-2.39-6.26-2.91-9.24-1.6-.35.15-.77-.01-.92-.36-.15-.35.01-.77.36-.92 3.42-1.49 7.77-.92 10.57 1.88.24.24.24.64 0 .88z"/>
-                        </svg>
-                        <span class="ml-2 text-xl font-bold">Spotify Playlist Manager</span>
+                    <a href="{{ url_for('index') }}" class="flex items-center group">
+                        <div class="h-10 w-10 bg-spotify-green rounded-full flex items-center justify-center transition-all duration-300 group-hover:scale-110">
+                            <svg class="h-6 w-6 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.65 14.65c-.2.2-.51.2-.71 0-1.79-1.77-4.39-2.15-6.79-1.44-.33.09-.66-.12-.75-.44-.09-.33.12-.66.44-.75 2.82-.82 5.82-.39 7.95 1.33.2.2.2.51 0 .71zm1.23-2.75c-.25.25-.65.25-.9 0-2.05-2.05-5.18-2.65-7.6-1.44-.31.15-.68.02-.83-.29-.15-.31-.02-.68.29-.83 2.77-1.35 6.26-.69 8.61 1.65.25.25.25.65 0 .9zm.11-2.78c-.24.24-.64.24-.88 0-2.39-2.39-6.26-2.91-9.24-1.6-.35.15-.77-.01-.92-.36-.15-.35.01-.77.36-.92 3.42-1.49 7.77-.92 10.57 1.88.24.24.24.64 0 .88z"/>
+                            </svg>
+                        </div>
+                        <span class="ml-3 text-xl font-bold tracking-tight">Spotify Playlist Manager</span>
                     </a>
                 </div>
                 
-                <div class="hidden sm:flex items-center space-x-4">
+                <div class="hidden sm:flex items-center space-x-6">
+                    <a href="{{ url_for('public_playlists') }}" class="px-3 py-2 rounded-md text-sm font-medium hover:text-spotify-green transition-colors">
+                        Discover
+                    </a>
+                    
                     {% if current_user.is_authenticated %}
-                    <a href="{{ url_for('dashboard') }}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-opacity-75 hover:text-spotify-green transition-colors">
+                    <a href="{{ url_for('dashboard') }}" class="px-3 py-2 rounded-md text-sm font-medium hover:text-spotify-green transition-colors">
                         Dashboard
                     </a>
-                    <a href="{{ url_for('analysis') }}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-opacity-75 hover:text-spotify-green transition-colors">
+                    <a href="{{ url_for('analysis') }}" class="px-3 py-2 rounded-md text-sm font-medium hover:text-spotify-green transition-colors">
                         Analysis
                     </a>
-                    <a href="{{ url_for('logout') }}" class="px-3 py-2 rounded-md text-sm font-medium hover:bg-opacity-75 hover:text-spotify-green transition-colors">
+                    <a href="{{ url_for('logout') }}" class="px-3 py-2 rounded-md text-sm font-medium hover:text-spotify-green transition-colors">
                         Logout
                     </a>
                     {% else %}
                     <a href="{{ url_for('login') }}" class="spotify-button">
+                        <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-2-5.5l6-4.5-6-4.5v9z"/>
+                        </svg>
                         Login with Spotify
                     </a>
                     {% endif %}
                     
-                    <button class="theme-toggle ml-2" aria-label="Toggle theme">
+                    <button class="theme-toggle ml-2 p-2 rounded-full hover:bg-spotify-light-gray transition-colors" aria-label="Toggle theme">
                         <!-- Icon will be set by JavaScript -->
                     </button>
                 </div>
                 
                 <!-- Mobile menu button -->
                 <div class="flex items-center sm:hidden">
-                    <button class="theme-toggle mr-2" aria-label="Toggle theme">
+                    <button class="theme-toggle mr-2 p-2 rounded-full hover:bg-spotify-light-gray transition-colors" aria-label="Toggle theme">
                         <!-- Icon will be set by JavaScript -->
                     </button>
                     
-                    <button id="mobileMenuButton" type="button" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white" aria-controls="mobile-menu" aria-expanded="false">
+                    <button id="mobileMenuButton" type="button" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-spotify-light-gray focus:outline-none focus:ring-2 focus:ring-inset focus:ring-spotify-green transition-colors" aria-controls="mobile-menu" aria-expanded="false">
                         <span class="sr-only">Open main menu</span>
                         <svg class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -210,20 +260,24 @@
         </div>
 
         <!-- Mobile menu, show/hide based on menu state. -->
-        <div id="mobileMenu" class="sm:hidden hidden">
+        <div id="mobileMenu" class="sm:hidden hidden glass-effect">
             <div class="px-2 pt-2 pb-3 space-y-1">
+                <a href="{{ url_for('public_playlists') }}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-spotify-light-gray hover:text-spotify-green transition-colors">
+                    Discover
+                </a>
+                
                 {% if current_user.is_authenticated %}
-                <a href="{{ url_for('dashboard') }}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white">
+                <a href="{{ url_for('dashboard') }}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-spotify-light-gray hover:text-spotify-green transition-colors">
                     Dashboard
                 </a>
-                <a href="{{ url_for('analysis') }}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white">
+                <a href="{{ url_for('analysis') }}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-spotify-light-gray hover:text-spotify-green transition-colors">
                     Analysis
                 </a>
-                <a href="{{ url_for('logout') }}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white">
+                <a href="{{ url_for('logout') }}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-spotify-light-gray hover:text-spotify-green transition-colors">
                     Logout
                 </a>
                 {% else %}
-                <a href="{{ url_for('login') }}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-gray-700 hover:text-white">
+                <a href="{{ url_for('login') }}" class="block px-3 py-2 rounded-md text-base font-medium hover:bg-spotify-light-gray hover:text-spotify-green transition-colors">
                     Login with Spotify
                 </a>
                 {% endif %}
@@ -237,27 +291,41 @@
     </main>
 
     <!-- Footer -->
-    <footer class="bg-spotify-gray py-6 mt-auto">
+    <footer class="bg-spotify-gray py-8 mt-auto">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex flex-col md:flex-row justify-between items-center">
-                <div class="mb-4 md:mb-0">
+                <div class="mb-6 md:mb-0">
+                    <div class="flex items-center mb-4">
+                        <div class="h-8 w-8 bg-spotify-green rounded-full flex items-center justify-center">
+                            <svg class="h-5 w-5 text-white" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.65 14.65c-.2.2-.51.2-.71 0-1.79-1.77-4.39-2.15-6.79-1.44-.33.09-.66-.12-.75-.44-.09-.33.12-.66.44-.75 2.82-.82 5.82-.39 7.95 1.33.2.2.2.51 0 .71zm1.23-2.75c-.25.25-.65.25-.9 0-2.05-2.05-5.18-2.65-7.6-1.44-.31.15-.68.02-.83-.29-.15-.31-.02-.68.29-.83 2.77-1.35 6.26-.69 8.61 1.65.25.25.25.65 0 .9zm.11-2.78c-.24.24-.64.24-.88 0-2.39-2.39-6.26-2.91-9.24-1.6-.35.15-.77-.01-.92-.36-.15-.35.01-.77.36-.92 3.42-1.49 7.77-.92 10.57 1.88.24.24.24.64 0 .88z"/>
+                            </svg>
+                        </div>
+                        <span class="ml-2 text-lg font-semibold">Spotify Playlist Manager</span>
+                    </div>
                     <p class="text-sm text-gray-400">
-                        &copy; {% now year %} Spotify Playlist Manager. All rights reserved.
+                        &copy; {{ year }} Spotify Playlist Manager. All rights reserved.
                     </p>
                 </div>
-                <div class="flex space-x-6">
-                    <a href="#" class="text-gray-400 hover:text-spotify-green transition-colors">
-                        <span class="sr-only">GitHub</span>
-                        <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
-                        </svg>
-                    </a>
-                    <a href="#" class="text-gray-400 hover:text-spotify-green transition-colors">
-                        <span class="sr-only">Twitter</span>
-                        <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
-                        </svg>
-                    </a>
+                <div class="flex flex-col space-y-4 md:space-y-0 md:flex-row md:space-x-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-spotify-green mb-2">Links</h3>
+                        <ul class="space-y-2">
+                            <li><a href="{{ url_for('index') }}" class="text-sm text-gray-400 hover:text-white transition-colors">Home</a></li>
+                            <li><a href="{{ url_for('public_playlists') }}" class="text-sm text-gray-400 hover:text-white transition-colors">Discover</a></li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-semibold text-spotify-green mb-2">Connect</h3>
+                        <div class="flex space-x-4">
+                            <a href="https://github.com/ShaddyB1" class="text-gray-400 hover:text-spotify-green transition-colors">
+                                <span class="sr-only">GitHub</span>
+                                <svg class="h-6 w-6" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" />
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -275,8 +343,8 @@
             menu.classList.toggle('hidden');
             
             // Toggle icon
-            this.querySelector('.block').classList.toggle('hidden');
-            this.querySelector('.hidden').classList.toggle('hidden');
+            const icons = this.querySelectorAll('svg');
+            icons.forEach(icon => icon.classList.toggle('hidden'));
         });
     </script>
     

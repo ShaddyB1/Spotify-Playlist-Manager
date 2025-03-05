@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="min-h-screen bg-gradient-to-b from-spotify-black to-green-900">
+<div class="min-h-screen bg-gradient-to-br from-spotify-black via-gray-900 to-green-900">
     <!-- Hero Section -->
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-20">
         <div class="text-center">
             <div class="inline-block animate-fade-in">
                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-500 bg-opacity-20 text-green-300 mb-4">
@@ -17,113 +17,112 @@
             <p class="text-xl text-gray-300 max-w-2xl mx-auto mb-12">
                 Analyze, optimize, and discover similar tracks for your playlists with advanced AI-powered features.
             </p>
-            <a href="{{ url_for('login') }}" 
-               class="inline-flex items-center bg-green-500 text-white px-8 py-4 rounded-full font-bold hover:bg-green-600 transition-all transform hover:scale-105 duration-200">
-                <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-                </svg>
-                Login with Spotify
-            </a>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <a href="{{ url_for('login') }}" 
+                   class="inline-flex items-center justify-center bg-spotify-green text-white px-8 py-4 rounded-full font-bold hover:bg-green-600 transition-all transform hover:scale-105 duration-200 shadow-lg">
+                    <svg class="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                    </svg>
+                    Login with Spotify
+                </a>
+                <a href="{{ url_for('public_playlists') }}" 
+                   class="inline-flex items-center justify-center border-2 border-white text-white px-8 py-4 rounded-full font-bold hover:bg-white hover:text-green-800 transition-all transform hover:scale-105 duration-200 shadow-lg">
+                    <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    Browse Public Playlists
+                </a>
+            </div>
         </div>
+    </div>
 
-        <!-- Feature Grid -->
-        <div class="grid md:grid-cols-3 gap-8 mt-20">
+    <!-- Feature Grid -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 bg-black bg-opacity-30 backdrop-filter backdrop-blur-lg rounded-3xl mb-16">
+        <h2 class="text-3xl font-bold text-white text-center mb-12">Powerful Features</h2>
+        <div class="grid md:grid-cols-3 gap-8">
             <!-- Analytics Box -->
-            <div class="bg-gray-900 bg-opacity-50 backdrop-blur-lg rounded-xl p-6 transform hover:scale-105 transition-all duration-200">
-                <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-8 transform hover:scale-105 transition-all duration-300 shadow-xl border border-gray-800">
+                <div class="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                 </div>
-                <h3 class="text-xl font-bold text-white text-center mb-2">Smart Analytics</h3>
-                <p class="text-gray-400 text-center">
-                    Get detailed insights into your listening habits and playlist statistics.
+                <h3 class="text-xl font-bold text-white text-center mb-3">Smart Analytics</h3>
+                <p class="text-gray-300 text-center">
+                    Get detailed insights into your listening habits and playlist statistics with beautiful visualizations.
                 </p>
             </div>
 
             <!-- Optimization Box -->
-            <div class="bg-gray-900 bg-opacity-50 backdrop-blur-lg rounded-xl p-6 transform hover:scale-105 transition-all duration-200">
-                <div class="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-8 transform hover:scale-105 transition-all duration-300 shadow-xl border border-gray-800">
+                <div class="w-14 h-14 bg-spotify-green rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                 </div>
-                <h3 class="text-xl font-bold text-white text-center mb-2">Smart Optimization</h3>
-                <p class="text-gray-400 text-center">
-                    Let AI optimize your playlists based on your listening patterns.
+                <h3 class="text-xl font-bold text-white text-center mb-3">Playlist Optimization</h3>
+                <p class="text-gray-300 text-center">
+                    Improve your playlists by removing unpopular tracks and optimizing the flow for better listening experiences.
                 </p>
             </div>
 
-            <!-- Recommendations Box -->
-            <div class="bg-gray-900 bg-opacity-50 backdrop-blur-lg rounded-xl p-6 transform hover:scale-105 transition-all duration-200">
-                <div class="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+            <!-- Discovery Box -->
+            <div class="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl p-8 transform hover:scale-105 transition-all duration-300 shadow-xl border border-gray-800">
+                <div class="w-14 h-14 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
+                    <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                 </div>
-                <h3 class="text-xl font-bold text-white text-center mb-2">Similar Songs</h3>
-                <p class="text-gray-400 text-center">
-                    Discover and add new music that perfectly matches your playlist's vibe.
+                <h3 class="text-xl font-bold text-white text-center mb-3">Track Discovery</h3>
+                <p class="text-gray-300 text-center">
+                    Find new tracks based on your existing playlists and expand your music collection with personalized recommendations.
                 </p>
             </div>
         </div>
-
-        <!-- Stats Section -->
-        <div class="mt-24 grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
-            <div class="p-6">
-                <div class="text-4xl font-bold text-white mb-2">500+</div>
-                <div class="text-gray-400">Playlists Optimized</div>
-            </div>
-            <div class="p-6">
-                <div class="text-4xl font-bold text-white mb-2">50k+</div>
-                <div class="text-gray-400">Songs Analyzed</div>
-            </div>
-            <div class="p-6">
-                <div class="text-4xl font-bold text-white mb-2">98%</div>
-                <div class="text-gray-400">Happy Users</div>
-            </div>
-        </div>
-
-        <!-- Why Choose Us Section -->
-        <div class="mt-24">
-            <h2 class="text-3xl font-bold text-white text-center mb-12">Why Choose Us</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div class="bg-gray-900 bg-opacity-40 rounded-xl p-8">
-                    <div class="flex items-center mb-4">
-                        <div class="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center mr-4">
-                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                            </svg>
-                        </div>
-                        <h3 class="text-lg font-bold text-white">Safe & Secure</h3>
-                    </div>
-                    <p class="text-gray-400">
-                        We use official Spotify OAuth for authentication. Your account is always secure.
-                    </p>
-                </div>
-
-                <div class="bg-gray-900 bg-opacity-40 rounded-xl p-8">
-                    <div class="flex items-center mb-4">
-                        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center mr-4">
-                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                        </div>
-                        <h3 class="text-lg font-bold text-white">Advanced AI</h3>
-                    </div>
-                    <p class="text-gray-400">
-                        Our AI analyzes your music taste to provide the best recommendations.
-                    </p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Footer -->
-        <div class="mt-24 text-center">
-            <p class="text-gray-400">
-                Not affiliated with Spotify. Created with ❤️ for music lovers.
+    </div>
+    
+    <!-- Call to Action -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 text-center">
+        <div class="bg-gradient-to-r from-spotify-black to-green-900 p-12 rounded-3xl shadow-2xl">
+            <h2 class="text-4xl font-bold text-white mb-6">Ready to transform your playlists?</h2>
+            <p class="text-xl text-gray-300 max-w-2xl mx-auto mb-8">
+                Join thousands of music lovers who are enhancing their Spotify experience today.
             </p>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <a href="{{ url_for('login') }}" class="inline-flex items-center justify-center spotify-button px-8 py-4 text-lg shadow-lg">
+                    <svg class="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+                    </svg>
+                    Get Started Now
+                </a>
+                <a href="{{ url_for('public_playlists') }}" class="inline-flex items-center justify-center border-2 border-white text-white px-8 py-4 rounded-full font-bold hover:bg-white hover:text-green-800 transition-all transform hover:scale-105 duration-200 shadow-lg">
+                    Explore Public Playlists
+                </a>
+            </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Add animation for elements when they come into view
+    document.addEventListener('DOMContentLoaded', function() {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('animate-fade-in');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, {
+            threshold: 0.1
+        });
+        
+        document.querySelectorAll('.grid > div, .max-w-7xl > div').forEach(el => {
+            observer.observe(el);
+        });
+    });
+</script>
 {% endblock %}
