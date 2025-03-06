@@ -404,34 +404,61 @@ def browse_category(category):
 @app.route('/api/playlists/category/<category>', methods=['GET'])
 @rate_limit
 def get_category_playlists(category):
-    """Get playlists by category for the public page"""
+    """
+    Get playlists for a specific category with improved error handling.
+    Returns an empty list instead of an error if no playlists are found.
+    """
     try:
-        # Use guest token for public access
-        token = spotify_service.get_guest_token()
-        if not token:
-            return jsonify({'error': 'Unable to access Spotify API'}), 500
+        # Initialize SpotifyService to get an access token
+        token = None
+        if 'access_token' in session:
+            token = session['access_token']
+            app.logger.info("Using user token for category playlists")
+        else:
+            # Try to get a guest token for public access
+            try:
+                token_info = spotify_service.get_guest_token()
+                if token_info and 'access_token' in token_info:
+                    token = token_info['access_token']
+                    app.logger.info("Using guest token for category playlists")
+                else:
+                    app.logger.warning("No guest token available, proceeding with limited access")
+            except Exception as token_error:
+                app.logger.error(f"Error getting guest token: {str(token_error)}")
+                app.logger.warning("Proceeding without authentication")
         
-        manager = SpotifyPlaylistManager(token)
-        results = manager.get_category_playlists(category)
-        
-        if not results:
-            return jsonify([]), 200
+        # Use the PlaylistManager to fetch category playlists
+        try:
+            manager = SpotifyPlaylistManager(playlist_id=None)
+            if token:
+                manager.sp.auth_manager.set_access_token(token)
             
-        playlists = []
-        for item in results:
-            playlists.append({
-                'id': item['id'],
-                'name': item['name'],
-                'image_url': item['images'][0]['url'] if item['images'] else None,
-                'tracks': item['tracks']['total'],
-                'owner': item['owner']['display_name'],
-                'description': item.get('description', '')
-            })
+            playlists = manager.get_category_playlists(category)
             
-        return jsonify(playlists), 200
+            # Process playlists to include only necessary information
+            simplified_playlists = []
+            for playlist in playlists:
+                # Extract relevant playlist information
+                playlist_data = {
+                    'id': playlist.get('id', ''),
+                    'name': playlist.get('name', 'Unknown Playlist'),
+                    'description': playlist.get('description', ''),
+                    'image_url': playlist.get('images', [{}])[0].get('url', '') if playlist.get('images') else '',
+                    'owner': playlist.get('owner', {}).get('display_name', 'Unknown'),
+                    'tracks_total': playlist.get('tracks', {}).get('total', 0),
+                    'external_url': playlist.get('external_urls', {}).get('spotify', '')
+                }
+                simplified_playlists.append(playlist_data)
+            
+            return jsonify(simplified_playlists)
+        except Exception as e:
+            app.logger.error(f"Error fetching category playlists: {str(e)}")
+            # Return empty list for better user experience
+            return jsonify([])
+            
     except Exception as e:
-        logger.error(f"Error fetching category playlists: {str(e)}")
-        return jsonify({'error': 'Failed to load playlists'}), 500
+        app.logger.error(f"Unexpected error in category playlists route: {str(e)}")
+        return jsonify([]), 500
 
 @app.route('/api/playlist/<playlist_id>/follow', methods=['POST'])
 @spotify_service.require_auth
@@ -575,6 +602,47 @@ def test_spotify_api():
     except Exception as e:
         logger.error(f"Error in test endpoint: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/test-token', methods=['GET'])
+def test_token():
+    """Test endpoint to check if guest token can be obtained"""
+    response_data = {
+        'status': 'checking',
+        'client_id_available': False,
+        'client_secret_available': False,
+        'redirect_uri_available': False,
+        'token_attempts': []
+    }
+    
+    try:
+        # Check credentials
+        client_id = os.getenv('SPOTIFY_CLIENT_ID')
+        client_secret = os.getenv('SPOTIFY_CLIENT_SECRET')
+        redirect_uri = os.getenv('SPOTIFY_REDIRECT_URI')
+        
+        response_data['client_id_available'] = bool(client_id)
+        response_data['client_secret_available'] = bool(client_secret)
+        response_data['redirect_uri_available'] = bool(redirect_uri)
+        
+        # Try standard method
+        response_data['token_attempts'].append({'method': 'standard', 'success': False})
+        token = spotify_service.get_guest_token()
+        if token:
+            response_data['token_attempts'][-1]['success'] = True
+        
+        # Try direct method
+        response_data['token_attempts'].append({'method': 'direct', 'success': False})
+        token_direct = spotify_service.get_guest_token_direct()
+        if token_direct:
+            response_data['token_attempts'][-1]['success'] = True
+            
+        response_data['status'] = 'complete'
+        return jsonify(response_data)
+    except Exception as e:
+        logger.error(f"Token test error: {str(e)}")
+        response_data['status'] = 'error'
+        response_data['error'] = str(e)
+        return jsonify(response_data), 500
 
 def create_app():
     return app

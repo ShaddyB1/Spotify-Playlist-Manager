@@ -29,7 +29,7 @@ class SpotifyService:
             "user-read-email user-read-private user-follow-read "
             "user-follow-modify user-read-currently-playing "
             "user-read-playback-position streaming app-remote-control "
-            "user-library-modify"
+            "user-library-modify user-read-audio-features"
         )
         self._oauth = None  # Cache the OAuth instance
         self._client_credentials = None  # Cache client credentials

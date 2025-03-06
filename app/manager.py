@@ -39,38 +39,38 @@ class SpotifyPlaylistManager:
             "playlist-read-collaborative "
             "user-read-currently-playing user-read-playback-position "
             "streaming app-remote-control "
-            "user-library-modify"
+            "user-library-modify user-read-audio-features"
         )
         self.rate_limit_delay = 1
         
         # Map common category names to Spotify category IDs
         self.category_id_map = {
-            'pop': 'pop',
-            'rock': 'rock',
-            'hip hop': 'hiphop',
-            'hip-hop': 'hiphop',
-            'r&b': 'rnb',
-            'indie': 'indie_alt',
-            'indie rock': 'indie_alt',
-            'alternative': 'indie_alt',
-            'electronic': 'edm_dance',
-            'dance': 'edm_dance',
-            'edm': 'edm_dance',
-            'jazz': 'jazz',
-            'classical': 'classical',
-            'country': 'country',
-            'folk': 'folk_americana',
-            'americana': 'folk_americana',
-            'metal': 'metal',
-            'blues': 'blues',
-            'soul': 'soul',
-            'reggae': 'reggae',
-            'punk': 'punk',
-            'funk': 'funk',
-            'latin': 'latin',
-            'world': 'world',
-            'ambient': 'chill',
-            'chill': 'chill'
+            'pop': '0JQ5DAqbMKFEC4WFtoNRpw',
+            'rock': '0JQ5DAqbMKFDXXwE9BDJAr',
+            'hip hop': '0JQ5DAqbMKFQ00XGBls6ym',
+            'hip-hop': '0JQ5DAqbMKFQ00XGBls6ym',
+            'r&b': '0JQ5DAqbMKFEZPnFQSFB1T',
+            'indie': '0JQ5DAqbMKFCWjUTdzaG0e',
+            'indie rock': '0JQ5DAqbMKFCWjUTdzaG0e',
+            'alternative': '0JQ5DAqbMKFFtlLYUHv8bT',
+            'electronic': '0JQ5DAqbMKFHOzuVTgTizF',
+            'dance': '0JQ5DAqbMKFHOzuVTgTizF',
+            'edm': '0JQ5DAqbMKFHOzuVTgTizF',
+            'jazz': '0JQ5DAqbMKFAJ5xb0fwo9m',
+            'classical': '0JQ5DAqbMKFPrEiAOxgac3',
+            'country': '0JQ5DAqbMKFKLfwjuJMoNC',
+            'folk': '0JQ5DAqbMKFy78wprEpAjl',
+            'americana': '0JQ5DAqbMKFy78wprEpAjl',
+            'metal': '0JQ5DAqbMKFDkd668ypn6O',
+            'blues': '0JQ5DAqbMKFQiK2EHwyjcU',
+            'soul': '0JQ5DAqbMKFIpEuaCnimBj',
+            'reggae': '0JQ5DAqbMKFIpEuaCnimBj',  # No specific reggae category, using Soul as fallback
+            'punk': '0JQ5DAqbMKFAjfauKLOZiv',
+            'funk': '0JQ5DAqbMKFFsW9N8maB6z',
+            'latin': '0JQ5DAqbMKFxXaXKP7zcDp',
+            'world': '0JQ5DAqbMKFAQy4HL4XU2D',  # Using Travel as fallback
+            'ambient': '0JQ5DAqbMKFLjmiZRss79w',
+            'chill': '0JQ5DAqbMKFFzDl7qN9Apr'
         }
         
         try:
@@ -868,26 +868,81 @@ class SpotifyPlaylistManager:
             logger.error(f"Error during cleanup: {str(e)}")
     
     def get_category_playlists(self, category, limit=20):
-        """Get playlists from a specific category."""
+        """
+        Get playlists for a specific category with improved error handling and fallback.
+        
+        Args:
+            category: The name of the category (case-insensitive)
+            limit: Maximum number of playlists to return
+            
+        Returns:
+            List of playlist objects or empty list if none found
+        """
+        # Common category mapping (lowercase name to Spotify ID)
+        category_ids = {
+            'rock': '0JQ5DAqbMKFHCxg5H5PtqW',
+            'pop': '0JQ5DAqbMKFDXXwE9BDJAr',
+            'hip hop': '0JQ5DAqbMKFQ00XGBls6ym',
+            'r&b': '0JQ5DAqbMKFEZPnFQSFB1T',
+            'indie': '0JQ5DAqbMKFAXlCG6QiuXf',
+            'dance': '0JQ5DAqbMKFzHmL4tf05da',
+            'electronic': '0JQ5DAqbMKFFzDl7qN9Apr',
+            'jazz': '0JQ5DAqbMKFAJ5xb0fwo9m',
+            'metal': '0JQ5DAqbMKFDTEtSaS4R92',
+            'classical': '0JQ5DAqbMKFPrEiAOxgac3',
+            'reggae': '0JQ5DAqbMKFIpEuaCnimBj',
+            'punk': '0JQ5DAqbMKFAjfauKLOZiv',
+            'funk': '0JQ5DAqbMKFFsW9N8maB6z',
+            'latin': '0JQ5DAqbMKFxXaXKP7zcDp',
+            'world': '0JQ5DAqbMKFAQy4HL4XU2D',
+            'ambient': '0JQ5DAqbMKFLjmiZRss79w',
+            'chill': '0JQ5DAqbMKFFzDl7qN9Apr'
+        }
+        
+        logger.info(f"Getting playlists for category: {category}")
+        
+        # Normalize category name for case-insensitive lookup
+        category_lower = category.lower()
+        category_id = category_ids.get(category_lower, category_lower)
+        
+        playlists = []
+        
         try:
-            # Map common category names to Spotify category IDs
-            category_id = self.category_id_map.get(category.lower(), category.lower())
+            # First try to get playlists from the category endpoint
+            logger.info(f"Attempting to get playlists for category ID: {category_id}")
+            results = self._make_spotify_request(
+                self.sp.category_playlists, 
+                category_id=category_id, 
+                limit=limit
+            )
             
-            # Get category playlists
-            results = self.sp.category_playlists(category_id=category_id, limit=limit)
-            
-            if not results or 'playlists' not in results or 'items' not in results['playlists']:
+            if results and 'playlists' in results and 'items' in results['playlists']:
+                playlists = results['playlists']['items']
+                logger.info(f"Found {len(playlists)} playlists for category {category}")
+            else:
                 logger.warning(f"No playlists found for category: {category}")
-                return []
-                
-            return results['playlists']['items']
-        except SpotifyException as e:
-            logger.error(f"Spotify error getting category playlists: {str(e)}")
-            # Try search as fallback
-            return self.search_playlists(category, limit)
+        
         except Exception as e:
-            logger.error(f"Error getting category playlists: {str(e)}")
-            return []
+            logger.error(f"Error getting category playlists for {category}: {str(e)}")
+            
+        # If no playlists found or error occurred, try search as fallback
+        if not playlists:
+            logger.info(f"Falling back to search for category: {category}")
+            try:
+                search_results = self._make_spotify_request(
+                    self.sp.search, 
+                    q=f"genre:{category}", 
+                    type='playlist', 
+                    limit=limit
+                )
+                
+                if search_results and 'playlists' in search_results and 'items' in search_results['playlists']:
+                    playlists = search_results['playlists']['items']
+                    logger.info(f"Found {len(playlists)} playlists via search for {category}")
+            except Exception as e:
+                logger.error(f"Error searching for playlists for category {category}: {str(e)}")
+        
+        return playlists
             
     def search_playlists(self, query, limit=20):
         """Search for playlists by query."""
